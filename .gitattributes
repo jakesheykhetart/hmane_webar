@@ -1,2 +1,16 @@
-# Auto detect text files and perform LF normalization
+# Normalize line endings across machines (GitHub Desktop's default)
 * text=auto
+
+# Treat binary AR assets as binary so Git doesn't try to diff/merge them
+*.mind   binary
+*.glb    binary
+*.gltf   binary
+*.usdz   binary
+*.mp3    binary
+*.m4a    binary
+*.wav    binary
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.webp   binary
+*.mp4    binary

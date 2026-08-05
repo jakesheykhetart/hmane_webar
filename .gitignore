@@ -1,0 +1,25 @@
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Node (only if you later add a build step)
+node_modules/
+npm-debug.log*
+
+# Local build output — releases are built by GitHub Actions, not committed
+dist/
+build/
+*.zip
+
+# Source art that shouldn't ship (keep exports, not working files)
+*.psd
+*.ai
+*.blend
+*.blend1
+*.aep

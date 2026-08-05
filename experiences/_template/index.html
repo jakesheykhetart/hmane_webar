@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="An augmented reality experience.">
+  <meta name="theme-color" content="#10100e">
+  <title>Experience Title — AR</title>
+
+  <!-- A-Frame must load before MindAR -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+  <link rel="stylesheet" href="../../shared/css/ar-ui.css">
+</head>
+<body>
+
+  <!-- ── Loading / start gate ───────────────────────────────────────────
+       The tap on this button is what triggers the camera permission
+       prompt. iOS Safari will not grant camera or play audio without it. -->
+  <div class="ar-loader" id="ar-loader">
+    <div class="ar-spinner" role="presentation"></div>
+    <h1>Experience Title</h1>
+    <p>Point your camera at the printed target to bring the object to life.</p>
+    <button class="ar-btn ar-btn--primary" id="ar-start" data-ready-label="Start experience" disabled>
+      Loading…
+    </button>
+  </div>
+
+  <!-- ── AR scene ────────────────────────────────────────────────────── -->
+  <a-scene
+    id="ar-scene"
+    mindar-image="imageTargetSrc: ./assets/targets/targets.mind; autoStart: false; uiLoading: no; uiScanning: no; uiError: no; filterMinCF: 0.0001; filterBeta: 0.001"
+    color-space="sRGB"
+    renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false">
+
+    <a-assets>
+      <!-- Swap these for your real files. Delete any you don't use. -->
+      <img id="overlay-img" src="./assets/images/overlay.png" alt="">
+      <a-asset-item id="model" src="./assets/models/model.glb"></a-asset-item>
+    </a-assets>
+
+    <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false; rayOrigin: mouse"></a-camera>
+
+    <!-- targetIndex 0 = the first image compiled into targets.mind -->
+    <a-entity mindar-image-target="targetIndex: 0">
+
+      <!-- Flat overlay pinned to the target. Width 1 = the target's width. -->
+      <a-plane
+        src="#overlay-img"
+        position="0 0 0"
+        height="0.552"
+        width="1"
+        rotation="0 0 0"
+        material="transparent: true; alphaTest: 0.1">
+      </a-plane>
+
+      <!-- 3D model sitting above the target -->
+      <a-gltf-model
+        src="#model"
+        position="0 0 0.1"
+        rotation="0 0 0"
+        scale="0.3 0.3 0.3"
+        animation-mixer>
+      </a-gltf-model>
+
+    </a-entity>
+  </a-scene>
+
+  <!-- ── Narration audio ─────────────────────────────────────────────── -->
+  <audio id="ar-audio" src="./assets/audio/narration.mp3" preload="auto"></audio>
+
+  <!-- ── Overlay chrome ──────────────────────────────────────────────── -->
+  <div class="ar-overlay">
+
+    <div class="ar-controls">
+      <button class="ar-btn ar-icon-btn" id="ar-audio-btn" data-interactive
+              aria-pressed="true" aria-label="Turn narration audio off">🔊</button>
+      <button class="ar-btn ar-icon-btn" id="ar-tts-btn" data-interactive
+              aria-pressed="false" aria-label="Read instructions aloud">🗣</button>
+    </div>
+
+    <div class="ar-scan" id="ar-scan" hidden>
+      <div class="ar-reticle" role="presentation"></div>
+      <p>Frame the target image</p>
+    </div>
+
+    <div class="ar-card" id="ar-card" hidden data-interactive>
+      <h2>About this object</h2>
+      <div id="ar-instructions">
+        <ol>
+          <li>Replace this copy with your object description.</li>
+          <li>Keep the target fully in frame for stable tracking.</li>
+          <li>Tap the speaker icon to mute narration.</li>
+        </ol>
+      </div>
+      <div class="ar-btn-row">
+        <button class="ar-btn" id="ar-more" data-interactive>Learn more</button>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="ar-sr" id="ar-live" role="status" aria-live="polite"></p>
+
+  <script src="../../shared/js/ar-ui.js"></script>
+  <script>
+    ARUI.init({
+      onTargetFound: function () {
+        // Per-experience logic goes here (start animations, log analytics…)
+      },
+      onTargetLost: function () {
+        // …and teardown here.
+      }
+    });
+  </script>
+</body>
+</html>

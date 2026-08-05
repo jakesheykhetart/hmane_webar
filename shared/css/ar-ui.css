@@ -1,0 +1,175 @@
+/* ── hmane-ar shared UI ────────────────────────────────────────────────
+   Chrome that sits on top of the MindAR camera view: loader, instruction
+   card, scan reticle, audio + narration controls.
+   Design goals: high contrast, large tap targets, no reliance on colour
+   alone, works one-handed while the phone is held up to an object.
+   ------------------------------------------------------------------- */
+
+:root {
+  --ar-bg:        #10100e;
+  --ar-surface:   rgba(18, 18, 16, 0.92);
+  --ar-ink:       #f5f1e8;
+  --ar-ink-dim:   #b9b3a5;
+  --ar-accent:    #c9a227;
+  --ar-radius:    14px;
+  --ar-pad:       clamp(16px, 4vw, 28px);
+  --ar-safe-b:    env(safe-area-inset-bottom, 0px);
+  --ar-safe-t:    env(safe-area-inset-top, 0px);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ar-bg);
+  color: var(--ar-ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
+
+/* MindAR injects its own video + canvas; keep them under our UI */
+.a-canvas, video { z-index: 0 !important; }
+
+/* ── Overlay scaffold ─────────────────────────────────────────────── */
+.ar-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none; /* children opt back in */
+  padding: calc(var(--ar-safe-t) + 12px) 12px calc(var(--ar-safe-b) + 12px);
+}
+.ar-overlay [data-interactive] { pointer-events: auto; }
+
+/* ── Loading gate ─────────────────────────────────────────────────── */
+.ar-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-content: center;
+  gap: 18px;
+  text-align: center;
+  padding: var(--ar-pad);
+  background: var(--ar-bg);
+  transition: opacity .4s ease;
+}
+.ar-loader[hidden] { display: none; }
+.ar-loader.is-out { opacity: 0; pointer-events: none; }
+.ar-loader h1 { font-size: 1.35rem; margin: 0; font-weight: 650; letter-spacing: .01em; }
+.ar-loader p  { margin: 0; color: var(--ar-ink-dim); font-size: .95rem; max-width: 34ch; }
+
+.ar-spinner {
+  width: 42px; height: 42px;
+  margin: 0 auto;
+  border: 3px solid rgba(245, 241, 232, .18);
+  border-top-color: var(--ar-accent);
+  border-radius: 50%;
+  animation: ar-spin 1s linear infinite;
+}
+@keyframes ar-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .ar-spinner { animation-duration: 3s; }
+}
+
+/* ── Instruction card ─────────────────────────────────────────────── */
+.ar-card {
+  margin-top: auto;
+  background: var(--ar-surface);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(245, 241, 232, .14);
+  border-radius: var(--ar-radius);
+  padding: var(--ar-pad);
+  max-width: 560px;
+  width: 100%;
+  margin-inline: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,.45);
+}
+.ar-card[hidden] { display: none; }
+.ar-card h2 { margin: 0 0 8px; font-size: 1.05rem; font-weight: 650; }
+.ar-card ol { margin: 0 0 16px; padding-left: 1.25em; color: var(--ar-ink-dim); line-height: 1.55; font-size: .95rem; }
+.ar-card li + li { margin-top: 6px; }
+
+/* ── Buttons ──────────────────────────────────────────────────────── */
+.ar-btn {
+  appearance: none;
+  border: 1px solid rgba(245, 241, 232, .22);
+  background: rgba(245, 241, 232, .08);
+  color: var(--ar-ink);
+  font: inherit;
+  font-size: .95rem;
+  font-weight: 550;
+  padding: 13px 18px;
+  min-height: 48px;              /* WCAG 2.5.8 target size */
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background .15s ease, transform .1s ease;
+}
+.ar-btn:hover  { background: rgba(245, 241, 232, .16); }
+.ar-btn:active { transform: scale(.98); }
+.ar-btn:focus-visible { outline: 3px solid var(--ar-accent); outline-offset: 2px; }
+.ar-btn--primary {
+  background: var(--ar-accent);
+  border-color: var(--ar-accent);
+  color: #1a1608;
+  width: 100%;
+}
+.ar-btn--primary:hover { background: #dbb230; }
+.ar-btn[aria-pressed="true"] { background: var(--ar-accent); color: #1a1608; border-color: var(--ar-accent); }
+
+.ar-btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.ar-btn-row .ar-btn { flex: 1 1 auto; }
+
+/* ── Top control strip ────────────────────────────────────────────── */
+.ar-controls {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.ar-icon-btn {
+  width: 48px; height: 48px;
+  display: grid; place-items: center;
+  padding: 0;
+  font-size: 1.15rem;
+  line-height: 1;
+  border-radius: 50%;
+}
+
+/* ── Scan hint ────────────────────────────────────────────────────── */
+.ar-scan {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: var(--ar-ink);
+  text-shadow: 0 2px 8px rgba(0,0,0,.8);
+  font-size: .95rem;
+}
+.ar-scan[hidden] { display: none; }
+.ar-scan .ar-reticle {
+  width: min(62vw, 300px);
+  aspect-ratio: 3 / 4;
+  border: 2px dashed rgba(245, 241, 232, .55);
+  border-radius: 10px;
+  margin: 0 auto 14px;
+  animation: ar-pulse 2.4s ease-in-out infinite;
+}
+@keyframes ar-pulse { 0%,100% { opacity:.45 } 50% { opacity:.95 } }
+@media (prefers-reduced-motion: reduce) { .ar-scan .ar-reticle { animation: none; opacity: .7; } }
+
+/* ── Live region for screen readers ───────────────────────────────── */
+.ar-sr {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

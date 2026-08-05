@@ -1,0 +1,71 @@
+name: Build release zip
+
+# Two ways to fire this off:
+#   1. Push a tag shaped like  <experience>-v<version>   e.g. rosetta-stone-v1.0.0
+#   2. Run it by hand from the Actions tab (pick the experience from a dropdown)
+on:
+  push:
+    tags:
+      - '*-v*'
+  workflow_dispatch:
+    inputs:
+      experience:
+        description: 'Experience folder name (under experiences/)'
+        required: true
+        type: string
+      version:
+        description: 'Version label for the zip filename'
+        required: false
+        default: 'manual'
+        type: string
+
+permissions:
+  contents: write   # needed to create the Release and upload the asset
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Work out which experience and version to build
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            EXP="${{ inputs.experience }}"
+            VER="${{ inputs.version }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+            EXP="${TAG%-v*}"
+            VER="${TAG##*-v}"
+          fi
+          echo "experience=$EXP" >> "$GITHUB_OUTPUT"
+          echo "version=$VER"    >> "$GITHUB_OUTPUT"
+          echo "zip=${EXP}-${VER}.zip" >> "$GITHUB_OUTPUT"
+          echo "Building $EXP at version $VER"
+
+      - name: Build bundle
+        run: |
+          chmod +x tools/build-bundle.sh
+          ./tools/build-bundle.sh "${{ steps.meta.outputs.experience }}" "${{ steps.meta.outputs.version }}"
+
+      - name: Upload zip as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.experience }}-${{ steps.meta.outputs.version }}
+          path: dist/${{ steps.meta.outputs.zip }}
+          if-no-files-found: error
+
+      - name: Attach zip to a GitHub Release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ steps.meta.outputs.zip }}
+          name: ${{ steps.meta.outputs.experience }} ${{ steps.meta.outputs.version }}
+          generate_release_notes: true
+          body: |
+            **${{ steps.meta.outputs.experience }}** — version ${{ steps.meta.outputs.version }}
+
+            Download the `.zip` below, unzip it, and upload the contents to any
+            HTTPS web server. See `HOW-TO-HOST.txt` inside the bundle.
