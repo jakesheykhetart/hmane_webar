@@ -1,0 +1,28 @@
+{
+  "id": "_template",
+  "title": "Experience Title",
+  "client": "HMANE",
+  "version": "0.1.0",
+  "status": "template",
+  "summary": "One-sentence description of what the visitor sees and does.",
+  "targets": {
+    "mindFile": "assets/targets/targets.mind",
+    "sourceImages": ["assets/targets/source-01.jpg"],
+    "count": 1
+  },
+  "assets": {
+    "models": [],
+    "audio": [],
+    "images": []
+  },
+  "accessibility": {
+    "textToSpeech": true,
+    "captions": false,
+    "reducedMotion": true
+  },
+  "tested": {
+    "iosSafari": false,
+    "androidChrome": false
+  },
+  "notes": "Duplicate this folder to start a new experience. Update id, title and version."
+}
