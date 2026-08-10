@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>HMANE — Rosetta Stone AR — Chapter 1</title>
 
-<!-- Karla is SIL Open Font Licence, so unlike Calibre it needs no purchased licence. -->
+<!-- Karla is SIL Open Font Licence — no purchased licence needed. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Karla:wght@200;300;400&display=swap" rel="stylesheet">
@@ -14,78 +14,82 @@
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
 <style>
-  :root{
-    --navy:#000066;
-    --gold:#ebb563;
-    --grey:#D9DDDC;
-    --green:#63a152;
-    --red:#a32a2a;
-  }
+  :root{ --navy:#000066; --gold:#ebb563; --grey:#D9DDDC; --green:#63a152; --red:#a32a2a; }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000;
             font-family:'Karla',-apple-system,BlinkMacSystemFont,sans-serif;font-weight:300;}
 
-  /* ---------- AR layer (beat 1 only) ---------- */
+  /* z-order: ar 1 · dim 2 · ui-bg 3 · still 4 · masks 5 · ui 6 · b6 7 · answer 8 · viewer 10 · gate 15 · rotate 20 */
   #ar-wrap{position:fixed;inset:0;z-index:1;}
   #ar-dim{position:fixed;inset:0;background:#000;opacity:0;z-index:2;pointer-events:none;}
-
-  /* ---------- Still layer ----------
-     z-order matters: #ui-bg must sit BELOW the still, or the navy panel paints
-     over it once beat 2 starts. #ui is a separate, higher layer. */
   #ui-bg{position:fixed;inset:0;background:var(--navy);opacity:0;z-index:3;}
   #still-win{position:fixed;left:0;top:0;overflow:hidden;z-index:4;opacity:0;}
-  #still-img{position:absolute;transform-origin:0 0;display:block;}
-  /* Screen blend only during the double exposure; swapped to normal once it lands. */
+  #still-img{position:absolute;display:block;}
   #still-win.blend{mix-blend-mode:screen;}
   #still-win .edge{position:absolute;background:var(--gold);}
 
-  /* ---------- UI ---------- */
-  #ui{position:fixed;inset:0;z-index:5;pointer-events:none;}
+  /* Highlight mask — four panels around the lit band. Four panels rather than a
+     clip-path hole because Safari's support for evenodd clip-path is unreliable. */
+  #mask{position:fixed;inset:0;z-index:5;pointer-events:none;opacity:0;}
+  #mask div{position:absolute;background:rgba(0,0,0,.55);
+            backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
+  #band-label{position:fixed;z-index:6;color:var(--grey);opacity:0;pointer-events:none;
+              text-align:right;line-height:1.1;}
+
+  #ui{position:fixed;inset:0;z-index:6;pointer-events:none;}
   .ui-el{position:absolute;opacity:0;pointer-events:none;}
   #title{color:var(--gold);text-transform:uppercase;white-space:nowrap;line-height:1;}
   #body{color:var(--grey);}
   .btn{background:var(--navy);color:var(--gold);text-transform:uppercase;
        display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1;}
 
-  /* ---------- Slots ----------
-     #ui is pointer-events:none, so slots must opt back in or tap-to-place
-     never receives the second tap. */
   #slots{position:absolute;inset:0;}
-  .slot{position:absolute;background:transparent;transition:background-color .18s ease;
-        pointer-events:auto;}
+  .slot{position:absolute;background:transparent;transition:background-color .18s ease;pointer-events:auto;}
   .rule{position:absolute;background:var(--gold);}
+  /* Invisible tap targets laid over the stone inside the AR window. */
+  .stonezone{position:absolute;pointer-events:auto;background:transparent;}
 
-  /* ---------- Icon capsules ---------- */
   .cap{position:absolute;background:var(--navy);color:var(--gold);border-style:solid;
        border-color:var(--gold);text-transform:uppercase;display:flex;align-items:center;
        justify-content:center;line-height:1;user-select:none;touch-action:none;cursor:pointer;}
   .cap.armed{background:var(--gold);color:var(--navy);}
   .cap.placed{pointer-events:none;}
-  .cap.ghost{opacity:0;pointer-events:none;}
-  #drag-layer{position:fixed;inset:0;z-index:9;pointer-events:none;}
 
-  /* ---------- Beat 4 ---------- */
-  #b4{position:fixed;inset:0;z-index:7;opacity:0;pointer-events:none;
+  /* Beat 2 explainer + beat 6 outro share the blur/darken treatment. */
+  #veil{position:fixed;inset:0;z-index:6;opacity:0;pointer-events:none;
+        backdrop-filter:blur(0px);-webkit-backdrop-filter:blur(0px);background:rgba(0,0,0,0);}
+  #v-title{position:absolute;left:0;right:0;text-align:center;color:var(--gold);
+           text-transform:uppercase;white-space:nowrap;opacity:0;line-height:1;}
+  #v-body{position:absolute;color:var(--grey);text-align:center;opacity:0;}
+
+  #b6{position:fixed;inset:0;z-index:7;opacity:0;pointer-events:none;
       backdrop-filter:blur(0px);-webkit-backdrop-filter:blur(0px);background:rgba(0,0,0,0);}
-  #b4-text{position:absolute;left:0;right:0;text-align:center;color:var(--gold);
+  #b6-text{position:absolute;left:0;right:0;text-align:center;color:var(--gold);
            text-transform:uppercase;white-space:nowrap;opacity:0;line-height:1;}
 
-  /* ---------- Start gate ----------
-     Required. iOS Safari grants camera and audio only from a user gesture in
-     THIS document — activation does not pass down from the portal. The repo
-     template makes the same call (autoStart:false + #ar-start). */
+  /* Answer feedback — flat colour field, glyph centred. Built in CSS so it is
+     correct on a landscape tablet, where a portrait image would crop or letterbox. */
+  #answer{position:fixed;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;
+          opacity:0;pointer-events:none;}
+  #answer img{display:block;}
+
+  /* Zoom viewer — look only, no gameplay. */
+  #zoom-btn{position:absolute;z-index:6;opacity:0;pointer-events:none;cursor:pointer;}
+  #viewer{position:fixed;inset:0;z-index:10;background:#000;opacity:0;pointer-events:none;
+          overflow:hidden;touch-action:none;}
+  #viewer img{position:absolute;display:block;transform-origin:0 0;}
+  #viewer-close{position:absolute;z-index:11;cursor:pointer;}
+
   #gate{position:fixed;inset:0;z-index:15;background:var(--navy);color:var(--gold);
         display:flex;flex-direction:column;align-items:center;justify-content:center;
         text-align:center;padding:10vw;text-transform:uppercase;cursor:pointer;line-height:1.15;}
   #gate p{color:var(--grey);text-transform:none;margin:1.2em 0 0;opacity:.55;}
   #gate.ready p{opacity:1;}
 
-  /* ---------- Orientation guard ---------- */
   #rotate{position:fixed;inset:0;z-index:20;background:var(--navy);color:var(--gold);
           display:none;align-items:center;justify-content:center;text-align:center;
           text-transform:uppercase;padding:8vw;}
 
-  /* ---------- Calibration (?cal=1) ---------- */
   #cal{position:fixed;left:0;bottom:0;z-index:30;background:rgba(0,0,0,.82);color:#fff;
        font:12px/1.5 monospace;padding:10px 12px;display:none;width:100%;}
   #cal label{display:flex;align-items:center;gap:8px;margin:3px 0;}
@@ -95,63 +99,52 @@
 </head>
 <body>
 
-<!-- ============================ AR (BEAT 1) ============================ -->
 <div id="ar-wrap">
   <a-scene
     mindar-image="imageTargetSrc: ./assets/targets/targets.mind; autoStart: false; uiLoading: no; uiScanning: yes; uiError: no; filterMinCF: 0.001; filterBeta: 0.001;"
-    color-space="sRGB"
-    renderer="colorManagement: true, physicallyCorrectLights"
-    vr-mode-ui="enabled: false"
-    device-orientation-permission-ui="enabled: false">
-
+    color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights"
+    vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
     <a-assets>
       <a-asset-item id="rosetta-model" src="./assets/models/rosetta-stone.glb"></a-asset-item>
     </a-assets>
-
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
     <a-entity light="type: ambient; intensity: 0.95"></a-entity>
     <a-entity light="type: directional; intensity: 0.55" position="1 2 1"></a-entity>
-
     <a-entity mindar-image-target="targetIndex: 0" id="stone-target">
-      <!-- Alignment COMPUTED from assets/targets/source-01.jpg
-           (2342x3288, the exact source of the .mind). The white outline of the
-           stele in that photo sits at x 372-1916, y 17-3188, which in MindAR
-           anchor units (1 unit = marker width, origin at marker centre) is
-           0.659 wide x 1.354 tall. Fitted against the GLB bbox of 2.186 x 4.101.
-           The old demo's 0.44 / "-0.05 -0.1 0" was tuned to a different, tighter
-           target crop (1225x1600) and would have been ~40% too large.
-           GLB bbox aspect (0.533) differs from the stele's (0.487), so width-fit
-           gives 0.302 and height-fit 0.330; this is the mean. Verify with ?cal=1. -->
-      <a-gltf-model id="stone-model"
-        rotation="0 0 0"
-        position="-0.048 -0.204 0"
-        scale="0.316 0.316 0.316"
-        src="#rosetta-model"></a-gltf-model>
+      <!-- Computed from assets/targets/source-01.jpg and confirmed on device 260809. -->
+      <a-gltf-model id="stone-model" rotation="0 0 0"
+        position="-0.048 -0.204 0" scale="0.316 0.316 0.316" src="#rosetta-model"></a-gltf-model>
     </a-entity>
   </a-scene>
 </div>
 
 <div id="ar-dim"></div>
-
-<!-- ============================ STILL ============================ -->
+<div id="ui-bg"></div>
 <div id="still-win"><img id="still-img" alt=""></div>
 
-<!-- ============================ UI ============================ -->
-<div id="ui-bg"></div>
+<div id="mask"><div></div><div></div><div></div><div></div></div>
+<div id="band-label"></div>
+
 <div id="ui">
   <div id="slots"></div>
   <div id="title" class="ui-el">Match the Script</div>
   <div id="body" class="ui-el"></div>
   <div id="play" class="ui-el btn">Play!</div>
+  <img id="zoom-btn" src="./assets/images/zoom-icon.png" alt="Zoom">
 </div>
-<div id="drag-layer"></div>
 
-<!-- ============================ BEAT 4 ============================ -->
-<div id="b4"><div id="b4-text">Scripts Identified!</div><div id="next" class="ui-el btn">Next</div></div>
+<div id="veil">
+  <div id="v-title">Three Scripts</div>
+  <div id="v-body"></div>
+  <div id="v-next" class="ui-el btn">Next</div>
+</div>
 
-<!-- Start gate. If the portal ever loads this experience INSIDE its own
-     document (rather than navigating to it), the portal's tap does carry over
-     and this block can be deleted — set autoStart:true on the a-scene. -->
+<div id="b6"><div id="b6-text">Scripts Identified!</div><div id="next" class="ui-el btn">Next</div></div>
+
+<div id="answer"><img id="answer-img" alt=""></div>
+
+<div id="viewer"><img id="viewer-img" alt=""><img id="viewer-close" src="./assets/images/zoom-icon.png" alt="Close"></div>
+
 <div id="gate">
   <div id="gate-title">The Rosetta Stone</div>
   <p id="gate-sub">Preparing…</p>
@@ -171,675 +164,733 @@
 <script>
 /* ===================================================================
    HMANE ROSETTA STONE — CHAPTER 1
-   Built from HMANE ROSETTA STONE TECHNICAL STORYBOARD CHAP 1 260808
+   Built from HMANE ROSETTA STONE TECHNICAL STORYBOARD CHAP 1 260810
+   Beats: 1 target found · 2 double exposure + three scripts ·
+          3 language tour · 4 shrink + instructions · 5 puzzle · 6 outro
    =================================================================== */
 
 const CFG = {
 
-  /* ---- Asset paths. Relative to index.html. If you file assets by type,
-     change them here and in the two HTML attributes noted below —
-     a-scene[mindar-image] imageTargetSrc, and #rosetta-model src.
-     Everything else reads from this block. ---- */
   paths: {
     stillPhone : './assets/images/rosetta-phone.jpg',
-    stillTablet: './assets/images/rosetta-tablet.jpg'
+    stillTablet: './assets/images/rosetta-tablet.jpg',
+    correct    : './assets/images/answer-correct.png',
+    incorrect  : './assets/images/answer-incorrect.png'
   },
 
-  /* ---- Stone landmarks, in each still's own pixel space (top-down) ----
-     PHONE bottom is 1983, not the 1946 written on the annotation. Cross-checking
-     the two script divisions as a fraction of stone height against the tablet
-     image agrees to 0.06% at 1983 and is off by ~1.5% at 1946. Change here if
-     you'd rather use the labelled figure. */
-  phone : { w:1400, h:2100, top:127, div1:1188, div2:1546, bottom:1983,
-            src:{x:0, y:0, w:1400, h:2100} },
+  /* ---- PHONE still 1400 x 2100 ----
+     slot* are the four gold-line y values and the beat 5 tap-zone boundaries.
+     bands are the beat 3 highlight/zoom rectangles — deliberately a different,
+     tighter set covering only the legible script on the surviving fragment. */
+  phone : {
+    w:1400, h:2100,
+    src:{x:0, y:0, w:1400, h:2100},
+    slotY:[127, 1188, 1546, 1983],
+    stoneX:[269, 1187],
+    bands:[ {x0:308, x1:1180, y0:836,  y1:1190},
+            {x0:308, x1:1180, y0:1190, y1:1563},
+            {x0:308, x1:1180, y0:1563, y1:1957} ]
+  },
 
-  /* TABLET: full frame is used at beat 1.5 (full screen), then the window
-     clips to the crop box you marked at (750,0)-(1775,1600). */
-  tablet: { w:2560, h:1600, top:90,  div1:910,  div2:1184, bottom:1523,
-            src:{x:750, y:0, w:1025, h:1600} },
+  /* ---- TABLET still 2560 x 1600 ----
+     Band and slot values derived by similarity transform from the phone still
+     and validated against Jake's independent tablet annotations to within 4px. */
+  tablet: {
+    w:2560, h:1600,
+    src:{x:750, y:0, w:1025, h:1600},
+    slotY:[90, 909, 1186, 1523],
+    stoneX:[906, 1623],
+    bands:[ {x0:936, x1:1618, y0:637,  y1:911},
+            {x0:936, x1:1618, y0:911,  y1:1199},
+            {x0:936, x1:1618, y0:1199, y1:1503} ]
+  },
 
-  /* ---- Layout ---- */
-  phoneWin : { w:0.65, h:0.60 },   // fraction of screen
-  tabletWinFrac : 0.40,            // 0.40 recommended; 0.35 was the original spec.
-                                   // At 0.35 the stone touches both edges of the
-                                   // column on a 12.9" iPad (13-17px of wall left).
+  phoneWin: { w:0.65, h:0.60 },
+  tabletWinFrac: 0.40,
 
-  /* ---- Timing (seconds) ---- */
+  /* Beat 3 zoom: band height fills this fraction of screen height.
+     0.40 gives 2.37x on phone and 2.34x on tablet — near-identical
+     magnification on both, which is why it is a shared rule. */
+  zoomFill: 0.40,
+
   t: { fadeIn:1.5, hold:2.0, dblExp:1.0, shrink:0.2, fade:0.2,
        bodyDelay:0.2, btnDelay:1.5, iconDelay:0.2,
-       wrongHold:2.0, winHold:1.0, b4Fade:0.25, b4Btn:1.0 },
+       veilNext:2.0,
+       tourOpen:1.5, tourHold:2.0, tourZoom:1.0, tourZoomHold:2.5, tourRest:1.0, tourClose:1.5,
+       answerHold:1.0, wrongHold:2.0, winHold:1.0, b6Fade:0.25, b6Btn:1.0 },
 
-  /* ---- Type, at 375pt iPhone reference ---- */
-  type: { title:30, body:16, cap:20, btn:30, b4:30 },
+  type: { title:30, body:16, veilBody:18, cap:20, btn:30, b6:30, label:18 },
   px  : { border:5, rule:10, margin:16 },
+  b6  : { blur:12, darken:0.55 },
 
-  /* ---- Beat 4 ---- */
-  b4: { blur:12, darken:0.55 },
-
-  /* ---- Puzzle ---- */
-  labels : ['GREEK','HIEROGLYPHIC','DEMOTIC'],   // bank order — deliberate scramble
-  answer : ['HIEROGLYPHIC','DEMOTIC','GREEK'],   // slot order, top to bottom
+  labels : ['GREEK','HIEROGLYPHIC','DEMOTIC'],
+  answer : ['HIEROGLYPHIC','DEMOTIC','GREEK'],
+  bandLabels: ['Language I','Language II','Language III'],
 
   copy: {
-    phone : 'Drag each language label from the bank below, or tap a label and then tap a slot, to place it beside the corresponding script on the Rosetta Stone.',
-    tablet: 'Drag each language label from the bank to the right, or tap a label and then tap a slot, to place it beside the corresponding script on the Rosetta Stone.',
+    phone : 'Tap a language label from the bank below, then tap the matching script on the Rosetta Stone.',
+    tablet: 'Tap a language label from the bank on the right, then tap the matching script on the Rosetta Stone.',
+    /* PLACEHOLDER — replace with final approved wording. 38 words, which is
+       about the ceiling at 18pt before it crowds the NEXT button. */
+    threeScripts: 'The Rosetta Stone carries one decree written three times — in Egyptian hieroglyphic, in Egyptian demotic, and in Greek. Because scholars could already read the Greek, the other two scripts could finally be deciphered.',
     rotatePhone : 'Please hold your phone upright',
     rotateTablet: 'Please hold your tablet sideways'
-  },
-
-  dragThreshold: 10   // px of travel that turns a tap into a drag
+  }
 };
 
-/* ---- Audio hooks. Files land here later; nothing else changes. ---- */
-const Audio_ = {
-  beat1(){ /* cue: fades in with model, 1.5s full, .25s out */ },
-  ding(){  /* .5s correct chime */ },
-  buzz(){  /* .5s max Operation-style error */ }
-};
+const Audio_ = { beat1(){}, ding(){}, buzz(){} };
 
 /* =================== helpers =================== */
 const $ = id => document.getElementById(id);
 const vw = () => window.innerWidth;
 const vh = () => window.innerHeight;
 const isTablet = () => vw() > vh();
-
-/* Damped type scale. Linear scaling makes a 30pt title 82pt on a 12.9" iPad,
-   which is far too large; the 0.5 exponent lands it around 44pt.
-   This is the resolution of open item 1 — tune the exponent, nothing else. */
-function k(){ return Math.pow(Math.min(vw(),vh())/375, 0.5); }
+const wait = ms => new Promise(r => setTimeout(r, ms));
+/* Damped type scale — linear scaling would make the 30pt title 82pt on an iPad. */
+const k = () => Math.pow(Math.min(vw(), vh()) / 375, 0.5);
 const S = n => n * k();
+const cfgFor = () => isTablet() ? CFG.tablet : CFG.phone;
 
-/* Place an image inside a window so that srcRect covers it. */
 function fitCover(winW, winH, img, src){
   const s = Math.max(winW/src.w, winH/src.h);
-  return {
-    scale : s,
-    width : img.w * s,
-    height: img.h * s,
-    left  : winW/2 - (src.x + src.w/2) * s,
-    top   : winH/2 - (src.y + src.h/2) * s
-  };
+  return { scale:s, width:img.w*s, height:img.h*s,
+           left: winW/2 - (src.x + src.w/2)*s,
+           top : winH/2 - (src.y + src.h/2)*s };
 }
 
-/* =================== state =================== */
-const A = { placed:{}, armed:null, locked:new Set(), caps:{}, slotEls:[], beat:0,
-            paused:false, geo:null };
+const A = { beat:0, placed:{}, armed:null, locked:new Set(), caps:{}, slotEls:[],
+            layout:null, busy:false };
 
-/* =================== geometry =================== */
-function geometry(){
-  const W = vw(), H = vh(), tab = isTablet();
-  const cfg = tab ? CFG.tablet : CFG.phone;
-
-  const win = tab
-    ? { x:0, y:0, w:W*CFG.tabletWinFrac, h:H }
-    : { x:0, y:0, w:W*CFG.phoneWin.w,    h:H*CFG.phoneWin.h };
-
-  const fit = fitCover(win.w, win.h, {w:cfg.w,h:cfg.h}, cfg.src);
-  const yOf = imgY => win.y + fit.top + imgY * fit.scale;   // image px -> screen px
-
-  const lines = [cfg.top, cfg.div1, cfg.div2, cfg.bottom].map(yOf);
-
-  /* Slot column: phone = right of the window; tablet = middle third. */
-  const uiX  = tab ? win.w : 0;
-  const uiW  = tab ? W - win.w : W;
-  const slotCol = tab
-    ? { x: win.w,          w: uiW/2 }
-    : { x: win.w,          w: W - win.w };
-  const bankCol = tab
-    ? { x: win.w + uiW/2,  w: uiW/2 }
-    : { x: 0,              w: W };
-
-  return {W,H,tab,cfg,win,fit,lines,uiX,uiW,slotCol,bankCol,
-          m:S(CFG.px.margin), rule:S(CFG.px.rule), border:S(CFG.px.border)};
-}
-
-/* =================== still =================== */
-function paintStill(fullScreen){
-  const g = A.geo, cfg = g.cfg;
-  const win = fullScreen ? {x:0,y:0,w:g.W,h:g.H} : g.win;
-  const src = fullScreen ? {x:0,y:0,w:cfg.w,h:cfg.h} : cfg.src;
-  const fit = fitCover(win.w, win.h, {w:cfg.w,h:cfg.h}, src);
-
-  const el = $('still-win'), im = $('still-img');
-  el.style.left = win.x+'px'; el.style.top = win.y+'px';
-  el.style.width = win.w+'px'; el.style.height = win.h+'px';
-  im.style.width = fit.width+'px'; im.style.height = fit.height+'px';
-  im.style.left = fit.left+'px';   im.style.top = fit.top+'px';
-
-  /* Gold border: phone right+bottom, tablet right only. */
-  el.querySelectorAll('.edge').forEach(n=>n.remove());
-  if(!fullScreen){
-    const b = g.border;
-    const add = st => { const d=document.createElement('div'); d.className='edge';
-                        Object.assign(d.style,st); el.appendChild(d); };
-    add({right:'0',top:'0',width:b+'px',height:'100%'});
-    if(!g.tab) add({left:'0',bottom:'0',height:b+'px',width:'100%'});
+/* =================== still placement =================== */
+/* Three placements: 'full' (whole screen), 'band' (beat 3 zoom), 'window' (beat 4+). */
+function stillLayout(mode, bandIndex){
+  const W = vw(), H = vh(), tab = isTablet(), c = cfgFor();
+  if(mode === 'window'){
+    const win = tab ? {x:0,y:0,w:W*CFG.tabletWinFrac,h:H}
+                    : {x:0,y:0,w:W*CFG.phoneWin.w,h:H*CFG.phoneWin.h};
+    return {win, fit:fitCover(win.w, win.h, {w:c.w,h:c.h}, c.src), mode};
   }
+  if(mode === 'band'){
+    const b = c.bands[bandIndex];
+    const s = (CFG.zoomFill * H) / (b.y1 - b.y0);
+    return {win:{x:0,y:0,w:W,h:H}, mode, band:bandIndex,
+            fit:{ scale:s, width:c.w*s, height:c.h*s,
+                  left: W/2 - ((b.x0+b.x1)/2)*s,
+                  top : H/2 - ((b.y0+b.y1)/2)*s }};
+  }
+  return {win:{x:0,y:0,w:W,h:H}, mode:'full',
+          fit:fitCover(W, H, {w:c.w,h:c.h}, {x:0,y:0,w:c.w,h:c.h})};
 }
 
-/* =================== beat 1 — target found =================== */
-let modelObj = null, beat1Started = false;
+function applyStill(L, seconds){
+  const el = $('still-win'), im = $('still-img'), tab = isTablet();
+  const tr = seconds ? `left ${seconds}s ease, top ${seconds}s ease, width ${seconds}s ease, height ${seconds}s ease` : '';
+  el.style.transition = tr; im.style.transition = tr;
+  el.style.left = L.win.x+'px'; el.style.top = L.win.y+'px';
+  el.style.width = L.win.w+'px'; el.style.height = L.win.h+'px';
+  im.style.left = L.fit.left+'px'; im.style.top = L.fit.top+'px';
+  im.style.width = L.fit.width+'px'; im.style.height = L.fit.height+'px';
 
+  el.querySelectorAll('.edge').forEach(n=>n.remove());
+  if(L.mode === 'window'){
+    const b = S(CFG.px.border);
+    const add = st => { const d=document.createElement('div'); d.className='edge';
+                        Object.assign(d.style, st); el.appendChild(d); };
+    add({right:'0',top:'0',width:b+'px',height:'100%'});
+    if(!tab) add({left:'0',bottom:'0',height:b+'px',width:'100%'});
+  }
+  A.layout = L;
+}
+
+/* Image pixel -> screen pixel, for whatever placement is current. */
+const toScreen = (L, x, y) => ({ x: L.win.x + L.fit.left + x*L.fit.scale,
+                                 y: L.win.y + L.fit.top  + y*L.fit.scale });
+function bandRect(L, i){
+  const b = cfgFor().bands[i];
+  const a = toScreen(L, b.x0, b.y0), c = toScreen(L, b.x1, b.y1);
+  return {x:a.x, y:a.y, w:c.x-a.x, h:c.y-a.y};
+}
+
+/* =================== highlight mask =================== */
+function setMask(r, seconds){
+  const m = $('mask'), p = m.children, W = vw(), H = vh();
+  const tr = seconds ? `all ${seconds}s ease` : '';
+  const set = (el, o) => { el.style.transition = tr; Object.assign(el.style, o); };
+  set(p[0], {left:'0px', top:'0px', width:W+'px', height:Math.max(0,r.y)+'px'});
+  set(p[1], {left:'0px', top:(r.y+r.h)+'px', width:W+'px', height:Math.max(0,H-r.y-r.h)+'px'});
+  set(p[2], {left:'0px', top:r.y+'px', width:Math.max(0,r.x)+'px', height:r.h+'px'});
+  set(p[3], {left:(r.x+r.w)+'px', top:r.y+'px', width:Math.max(0,W-r.x-r.w)+'px', height:r.h+'px'});
+}
+function setBandLabel(i, r, seconds){
+  const el = $('band-label');
+  el.textContent = CFG.bandLabels[i];
+  el.style.fontSize = S(CFG.type.label)+'px';
+  el.style.transition = seconds ? `all ${seconds}s ease` : '';
+  const m = S(CFG.px.margin);
+  const right = Math.min(r.x + r.w, vw() - m);
+  el.style.left = '0px';
+  el.style.width = right+'px';
+  el.style.top = (r.y + r.h + 0.05*vh())+'px';
+}
+
+/* =================== beat 1 =================== */
+let modelObj = null, beat1Started = false;
 $('stone-model').addEventListener('model-loaded', e => {
   modelObj = e.detail.model;
-  modelObj.traverse(o => {
-    if(o.isMesh && o.material){
-      const mats = Array.isArray(o.material) ? o.material : [o.material];
-      mats.forEach(m => { m.transparent = true; m.opacity = 0; });
-    }
-  });
+  modelObj.traverse(o => { if(o.isMesh && o.material){
+    (Array.isArray(o.material)?o.material:[o.material]).forEach(m => { m.transparent=true; m.opacity=0; }); }});
 });
-
 function setModelOpacity(v){
   if(!modelObj) return;
-  modelObj.traverse(o => {
-    if(o.isMesh && o.material){
-      const mats = Array.isArray(o.material) ? o.material : [o.material];
-      mats.forEach(m => { m.opacity = v; });
-    }
-  });
+  modelObj.traverse(o => { if(o.isMesh && o.material){
+    (Array.isArray(o.material)?o.material:[o.material]).forEach(m => { m.opacity=v; }); }});
 }
-
 $('stone-target').addEventListener('targetFound', () => {
   if(beat1Started || CAL) return;
-  beat1Started = true;
-  A.beat = 1;
-  Audio_.beat1();
+  beat1Started = true; A.beat = 1; Audio_.beat1();
   const t0 = performance.now(), d = CFG.t.fadeIn*1000;
   (function ramp(){
-    const p = Math.min(1,(performance.now()-t0)/d);
+    const p = Math.min(1, (performance.now()-t0)/d);
     setModelOpacity(p);
     if(p<1) requestAnimationFrame(ramp);
-    else setTimeout(beat15, CFG.t.hold*1000);
+    else setTimeout(beat2, CFG.t.hold*1000);
   })();
 });
 
-/* =================== beat 1.5 — double exposure =================== */
-function beat15(){
-  A.beat = 1.5;
+/* =================== beat 2 — double exposure, then Three Scripts =================== */
+async function beat2(){
+  A.beat = 2;
   const sys = document.querySelector('a-scene').systems['mindar-image-system'];
-  try { sys.pause(); A.paused = true; } catch(e){ console.warn('pause failed', e); }
+  try { sys.pause(); } catch(e){ console.warn('pause failed', e); }
 
-  A.geo = geometry();
-  $('still-img').src = A.geo.tab ? CFG.paths.stillTablet : CFG.paths.stillPhone;
-  paintStill(true);
+  $('still-img').src = isTablet() ? CFG.paths.stillTablet : CFG.paths.stillPhone;
+  applyStill(stillLayout('full'), 0);
 
   const win = $('still-win'), dim = $('ar-dim'), d = CFG.t.dblExp;
   win.classList.add('blend');
   win.style.transition = `opacity ${d}s ease`;
   dim.style.transition = `opacity ${d}s ease`;
   requestAnimationFrame(()=>{ win.style.opacity = 1; dim.style.opacity = 1; });
+  await wait(d*1000);
 
-  setTimeout(()=>{
-    /* Live layer is fully black by now, so screen-over-black === normal-over-black.
-       Swapping the blend mode here is imperceptible and stops the still blending
-       with the navy UI once it shrinks. */
-    win.classList.remove('blend');
-    $('ar-wrap').style.display = 'none';
-    /* MindAR appends its scanning overlay to body, not to #ar-wrap. */
-    document.querySelectorAll('.mindar-ui-overlay').forEach(n => n.style.display = 'none');
-    beat2();
-  }, d*1000);
-}
+  /* Live layer is black by now, so screen-over-black === normal-over-black. */
+  win.classList.remove('blend');
+  $('ar-wrap').style.display = 'none';
+  document.querySelectorAll('.mindar-ui-overlay').forEach(n => n.style.display='none');
 
-/* =================== beat 2 — shrink + instructions =================== */
-function beat2(){
-  A.beat = 2;
-  const g = A.geo = geometry();
-
-  $('ui-bg').style.transition = `opacity ${CFG.t.shrink}s ease`;
-  $('ui-bg').style.opacity = 1;
-
-  const win = $('still-win'), im = $('still-img');
-  win.style.transition = `left ${CFG.t.shrink}s ease, top ${CFG.t.shrink}s ease, width ${CFG.t.shrink}s ease, height ${CFG.t.shrink}s ease`;
-  im.style.transition  = `left ${CFG.t.shrink}s ease, top ${CFG.t.shrink}s ease, width ${CFG.t.shrink}s ease, height ${CFG.t.shrink}s ease`;
-  requestAnimationFrame(()=> paintStill(false));
-
-  setTimeout(()=>{
-    win.style.transition = im.style.transition = '';
-    layoutBeat2();
-    show($('title'));
-    setTimeout(()=> show($('body')),  CFG.t.bodyDelay*1000);
-    setTimeout(()=> show($('play')),  (CFG.t.bodyDelay + CFG.t.btnDelay)*1000);
-  }, CFG.t.shrink*1000);
-}
-
-function show(el){
-  el.style.transition = `opacity ${CFG.t.fade}s ease`;
-  el.style.opacity = 1;
-  el.style.pointerEvents = 'auto';
-}
-function hide(el){
-  el.style.transition = `opacity ${CFG.t.fade}s ease`;
-  el.style.opacity = 0;
-  el.style.pointerEvents = 'none';
-}
-
-function layoutBeat2(){
-  const g = A.geo;
-  const t = $('title'), b = $('body'), p = $('play');
-
-  t.style.fontSize = S(CFG.type.title)+'px';
-  b.style.fontSize = S(CFG.type.body)+'px';
-  b.style.lineHeight = 1.4;
-  b.textContent = g.tab ? CFG.copy.tablet : CFG.copy.phone;
-
-  if(!g.tab){
-    /* Title sits under the window, one line, full width inside margins. */
-    const availW = g.W - 2*g.m;
-    t.style.left = g.m+'px';
-    t.style.width = availW+'px';
-    t.style.textAlign = 'left';
-    t.style.top = (g.win.h + g.border + 0.04*g.H)+'px';
-    fitOneLine(t, availW, CFG.type.title);
-
-    const tH = t.getBoundingClientRect().height || S(CFG.type.title);
-    b.style.left = g.m+'px';
-    b.style.width = availW+'px';
-    b.style.textAlign = 'left';
-    b.style.top = (parseFloat(t.style.top) + tH + 0.025*g.H)+'px';
-  } else {
-    const availW = g.uiW - 2*g.m;
-    t.style.left = (g.uiX + g.m)+'px';
-    t.style.width = availW+'px';
-    t.style.textAlign = 'center';
-    t.style.top = (0.06*g.H)+'px';
-    fitOneLine(t, availW, CFG.type.title);
-
-    const tH = t.getBoundingClientRect().height || S(CFG.type.title);
-    b.style.left = (g.uiX + g.m)+'px';
-    b.style.width = availW+'px';
-    b.style.textAlign = 'center';
-    b.style.top = (parseFloat(t.style.top) + tH + 0.025*g.H)+'px';
-  }
-
-  styleButton(p, 'PLAY!');
-  p.onclick = () => {
-    hide($('body')); hide(p);
-    setTimeout(beat3, (CFG.t.fade + CFG.t.iconDelay)*1000);
+  /* --- Three Scripts explainer. Still stays full screen behind the veil. --- */
+  const veil = $('veil'), vt = $('v-title'), vb = $('v-body'), vn = $('v-next');
+  layoutVeil();
+  veil.style.transition = `opacity ${CFG.t.fade}s ease, backdrop-filter ${CFG.t.fade}s ease, -webkit-backdrop-filter ${CFG.t.fade}s ease, background-color ${CFG.t.fade}s ease`;
+  veil.style.pointerEvents = 'auto';
+  requestAnimationFrame(()=>{
+    veil.style.opacity = 1;
+    veil.style.backdropFilter = veil.style.webkitBackdropFilter = `blur(${S(CFG.b6.blur)}px)`;
+    veil.style.background = `rgba(0,0,0,${CFG.b6.darken})`;
+  });
+  show(vt);
+  await wait(CFG.t.fade*1000);
+  show(vb);
+  await wait(CFG.t.fade*1000 + CFG.t.veilNext*1000);
+  styleButton(vn, 'NEXT');
+  show(vn);
+  vn.onclick = () => {
+    vn.onclick = null;
+    hide(vt); hide(vb); hide(vn);
+    veil.style.opacity = 0;
+    veil.style.backdropFilter = veil.style.webkitBackdropFilter = 'blur(0px)';
+    veil.style.background = 'rgba(0,0,0,0)';
+    veil.style.pointerEvents = 'none';
+    setTimeout(beat3, CFG.t.fade*1000);
   };
 }
 
-/* Title must hold one line; shrink to fit rather than wrap.
-   Same rule protects "SCRIPTS IDENTIFIED!" in beat 4, which at 30pt fills
-   essentially the whole measure on a 375pt iPhone. */
+function layoutVeil(){
+  const W = vw(), H = vh(), m = S(CFG.px.margin);
+  const vt = $('v-title'), vb = $('v-body');
+  const availW = Math.min(W - 2*m, S(520));
+  vt.style.fontSize = S(CFG.type.title)+'px';
+  fitOneLine(vt, W - 2*m, CFG.type.title);
+  vt.style.top = (H*0.34)+'px';
+  vb.style.fontSize = S(CFG.type.veilBody)+'px';
+  vb.style.lineHeight = 1.45;
+  vb.textContent = CFG.copy.threeScripts;
+  vb.style.left = ((W-availW)/2)+'px';
+  vb.style.width = availW+'px';
+  vb.style.top = (H*0.34 + S(CFG.type.title)*1.6)+'px';
+}
+
+/* =================== beat 3 — the language tour =================== */
+async function beat3(){
+  A.beat = 3;
+  applyStill(stillLayout('full'), 0);
+  $('mask').style.transition = `opacity ${CFG.t.fade}s ease`;
+  await wait(CFG.t.tourOpen*1000);
+
+  for(let i=0; i<3; i++){
+    const full = stillLayout('full');
+    const zoom = stillLayout('band', i);
+
+    /* highlight, at full-screen framing */
+    setMask(bandRect(full, i), 0);
+    setBandLabel(i, bandRect(full, i), 0);
+    $('mask').style.opacity = 1;
+    $('band-label').style.transition = `opacity ${CFG.t.fade}s ease`;
+    $('band-label').style.opacity = 1;
+    await wait(CFG.t.tourHold*1000);
+
+    /* zoom in — image, mask and label all transition together so they stay locked */
+    const z = CFG.t.tourZoom;
+    applyStill(zoom, z);
+    setMask(bandRect(zoom, i), z);
+    setBandLabel(i, bandRect(zoom, i), z);
+    await wait(z*1000 + CFG.t.tourZoomHold*1000);
+
+    /* zoom out */
+    applyStill(full, z);
+    setMask(bandRect(full, i), z);
+    setBandLabel(i, bandRect(full, i), z);
+    await wait(z*1000 + CFG.t.tourRest*1000);
+  }
+
+  $('mask').style.opacity = 0;
+  $('band-label').style.opacity = 0;
+  await wait(CFG.t.tourClose*1000);
+  beat4();
+}
+
+/* =================== beat 4 — shrink + instructions =================== */
+function beat4(){
+  A.beat = 4;
+  $('ui-bg').style.transition = `opacity ${CFG.t.shrink}s ease`;
+  $('ui-bg').style.opacity = 1;
+  applyStill(stillLayout('window'), CFG.t.shrink);
+
+  setTimeout(()=>{
+    layoutBeat4();
+    show($('title'));
+    showZoomButton();
+    setTimeout(()=> show($('body')), CFG.t.bodyDelay*1000);
+    setTimeout(()=> show($('play')), (CFG.t.bodyDelay + CFG.t.btnDelay)*1000);
+  }, CFG.t.shrink*1000);
+}
+
+function show(el){ el.style.transition = `opacity ${CFG.t.fade}s ease`; el.style.opacity = 1; el.style.pointerEvents='auto'; }
+function hide(el){ el.style.transition = `opacity ${CFG.t.fade}s ease`; el.style.opacity = 0; el.style.pointerEvents='none'; }
+
+function layoutBeat4(){
+  const W = vw(), H = vh(), tab = isTablet(), m = S(CFG.px.margin);
+  const L = A.layout;
+  const t = $('title'), b = $('body'), p = $('play');
+  t.style.fontSize = S(CFG.type.title)+'px';
+  b.style.fontSize = S(CFG.type.body)+'px';
+  b.style.lineHeight = 1.4;
+  b.textContent = tab ? CFG.copy.tablet : CFG.copy.phone;
+
+  if(!tab){
+    const availW = W - 2*m;
+    t.style.left = m+'px'; t.style.width = availW+'px'; t.style.textAlign='left';
+    t.style.top = (L.win.h + S(CFG.px.border) + 0.04*H)+'px';
+    fitOneLine(t, availW, CFG.type.title);
+    const tH = t.getBoundingClientRect().height || S(CFG.type.title);
+    b.style.left = m+'px'; b.style.width = availW+'px'; b.style.textAlign='left';
+    b.style.top = (parseFloat(t.style.top) + tH + 0.025*H)+'px';
+  } else {
+    const uiX = L.win.w, uiW = W - L.win.w, availW = uiW - 2*m;
+    t.style.left = (uiX+m)+'px'; t.style.width = availW+'px'; t.style.textAlign='center';
+    t.style.top = (0.06*H)+'px';
+    fitOneLine(t, availW, CFG.type.title);
+    const tH = t.getBoundingClientRect().height || S(CFG.type.title);
+    b.style.left = (uiX+m)+'px'; b.style.width = availW+'px'; b.style.textAlign='center';
+    b.style.top = (parseFloat(t.style.top) + tH + 0.025*H)+'px';
+  }
+  styleButton(p, 'PLAY!');
+  p.onclick = () => { p.onclick=null; hide($('body')); hide(p);
+                      setTimeout(beat5, (CFG.t.fade + CFG.t.iconDelay)*1000); };
+}
+
 function fitOneLine(el, maxW, basePt){
-  let size = S(basePt);
+  const size = S(basePt);
   el.style.fontSize = size+'px';
   const probe = document.createElement('span');
   probe.style.cssText = `position:absolute;visibility:hidden;white-space:nowrap;
     font-family:'Karla',sans-serif;font-weight:300;text-transform:uppercase;font-size:${size}px;`;
   probe.textContent = el.textContent;
   document.body.appendChild(probe);
-  const w = probe.getBoundingClientRect().width;
-  probe.remove();
-  if(w > maxW) el.style.fontSize = (size * maxW / w)+'px';
+  const w = probe.getBoundingClientRect().width; probe.remove();
+  if(w > maxW) el.style.fontSize = (size*maxW/w)+'px';
 }
 
 function styleButton(el, label){
-  const g = A.geo;
   el.textContent = label;
-  el.style.fontSize = S(CFG.type.btn)+'px';
-  el.style.border = `${g.border}px solid var(--gold)`;
-  const padX = S(14), padY = S(8);
-  el.style.padding = `${padY}px ${padX}px`;
-  el.style.right = g.m+'px';
-  el.style.bottom = g.m+'px';
-  el.style.left = 'auto'; el.style.top = 'auto';
   el.style.position = 'absolute';
+  el.style.fontSize = S(CFG.type.btn)+'px';
+  el.style.border = `${S(CFG.px.border)}px solid var(--gold)`;
+  el.style.padding = `${S(8)}px ${S(14)}px`;
+  el.style.right = S(CFG.px.margin)+'px';
+  el.style.bottom = S(CFG.px.margin)+'px';
+  el.style.left = 'auto'; el.style.top = 'auto';
 }
 
-/* =================== beat 3 — the puzzle =================== */
-function beat3(){
-  A.beat = 3;
-  const g = A.geo = geometry();
-  buildSlots(g);
-  buildBank(g);
-  [...A.slotEls, ...Object.values(A.caps)].forEach(el=>{
-    el.style.transition = `opacity ${CFG.t.fade}s ease`;
-    requestAnimationFrame(()=> el.style.opacity = 1);
-  });
-  document.querySelectorAll('.rule').forEach(el=>{
-    el.style.transition = `opacity ${CFG.t.fade}s ease`;
-    requestAnimationFrame(()=> el.style.opacity = 1);
-  });
+/* =================== zoom button + viewer =================== */
+function showZoomButton(){
+  const L = A.layout, z = $('zoom-btn');
+  const size = L.win.w * 0.08, inset = S(CFG.px.margin);
+  z.style.width = size+'px'; z.style.height = size+'px';
+  z.style.left = (L.win.x + L.win.w - size - inset - S(CFG.px.border))+'px';
+  z.style.top  = (L.win.y + L.win.h - size - inset - S(CFG.px.border))+'px';
+  z.style.transition = `opacity ${CFG.t.fade}s ease`;
+  z.style.opacity = 1; z.style.pointerEvents = 'auto';
+  z.onclick = openViewer;
 }
 
-function buildSlots(g){
-  const host = $('slots');
-  host.innerHTML = '';
-  A.slotEls = [];
+/* Look-only viewer. No answers register while it is open. */
+const V = { open:false, s:1, x:0, y:0, pointers:new Map(), pinch:null };
+function openViewer(){
+  const c = cfgFor(), v = $('viewer'), im = $('viewer-img');
+  im.src = $('still-img').src;
+  /* Open at the same magnification beat 3 used, centred on the stone. */
+  const b = c.bands[1];
+  V.s = (CFG.zoomFill * vh()) / (b.y1 - b.y0);
+  V.x = vw()/2 - ((b.x0+b.x1)/2) * V.s;
+  V.y = vh()/2 - ((b.y0+b.y1)/2) * V.s;
+  im.style.width = c.w+'px'; im.style.height = c.h+'px';
+  applyViewer();
+  const cs = S(28), m = S(CFG.px.margin);
+  const cl = $('viewer-close');
+  cl.style.width = cs+'px'; cl.style.height = cs+'px';
+  cl.style.right = m+'px'; cl.style.top = m+'px';
+  cl.onclick = closeViewer;
+  v.style.transition = `opacity ${CFG.t.fade}s ease`;
+  v.style.opacity = 1; v.style.pointerEvents = 'auto';
+  V.open = true;
+}
+function closeViewer(){
+  const v = $('viewer');
+  v.style.opacity = 0; v.style.pointerEvents = 'none';
+  V.open = false; V.pointers.clear(); V.pinch = null;
+}
+function applyViewer(){
+  $('viewer-img').style.transform = `translate(${V.x}px,${V.y}px) scale(${V.s})`;
+}
+(function viewerGestures(){
+  const v = $('viewer');
+  v.addEventListener('pointerdown', e => {
+    if(e.target.id === 'viewer-close') return;
+    v.setPointerCapture(e.pointerId);
+    V.pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  });
+  v.addEventListener('pointermove', e => {
+    if(!V.pointers.has(e.pointerId)) return;
+    const prev = V.pointers.get(e.pointerId);
+    V.pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    const pts = [...V.pointers.values()];
+    if(pts.length === 1){
+      V.x += e.clientX - prev.x; V.y += e.clientY - prev.y;
+    } else if(pts.length === 2){
+      const d = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+      const mid = {x:(pts[0].x+pts[1].x)/2, y:(pts[0].y+pts[1].y)/2};
+      if(V.pinch){
+        const f = d / V.pinch.d;
+        const ns = Math.min(6, Math.max(0.2, V.s * f));
+        /* keep the pinch midpoint anchored */
+        V.x = mid.x - (mid.x - V.x) * (ns / V.s);
+        V.y = mid.y - (mid.y - V.y) * (ns / V.s);
+        V.s = ns;
+      }
+      V.pinch = {d, mid};
+    }
+    applyViewer();
+  });
+  const end = e => { V.pointers.delete(e.pointerId); if(V.pointers.size < 2) V.pinch = null; };
+  v.addEventListener('pointerup', end);
+  v.addEventListener('pointercancel', end);
+})();
 
-  const col = g.slotCol;
-  const L = g.lines;
+/* =================== beat 5 — the puzzle =================== */
+function beat5(){
+  A.beat = 5;
+  buildSlots(); buildStoneZones(); buildBank();
+  [...A.slotEls, ...Object.values(A.caps), ...document.querySelectorAll('.rule')]
+    .forEach(el => { el.style.transition = `opacity ${CFG.t.fade}s ease`;
+                     requestAnimationFrame(()=> el.style.opacity = 1); });
+}
 
+function slotGeom(){
+  const W = vw(), tab = isTablet(), L = A.layout, c = cfgFor();
+  const uiW = W - L.win.w;
+  const col = tab ? {x:L.win.w, w:uiW/2} : {x:L.win.w, w:W - L.win.w};
+  const lines = c.slotY.map(y => toScreen(L, 0, y).y);
+  return {col, lines, uiW};
+}
+
+function buildSlots(){
+  const host = $('slots'); host.innerHTML=''; A.slotEls=[];
+  const {col, lines} = slotGeom(), tab = isTablet(), rule = S(CFG.px.rule);
   for(let i=0;i<3;i++){
     const s = document.createElement('div');
-    s.className = 'slot';
-    s.dataset.index = i;
-    s.style.left = col.x+'px';
-    s.style.width = col.w+'px';
-    s.style.top = L[i]+'px';
-    s.style.height = (L[i+1]-L[i])+'px';
-    s.style.opacity = 0;
-    host.appendChild(s);
-    A.slotEls.push(s);
+    s.className='slot'; s.dataset.index=i;
+    Object.assign(s.style,{left:col.x+'px', width:col.w+'px',
+      top:lines[i]+'px', height:(lines[i+1]-lines[i])+'px', opacity:0});
+    s.addEventListener('pointerup', ()=> tryPlace(i));
+    host.appendChild(s); A.slotEls.push(s);
   }
-  /* Four gold rules. Tablet adds a vertical rule down their left edge. */
-  L.forEach(y=>{
-    const r = document.createElement('div');
-    r.className = 'rule';
-    r.style.left = col.x+'px'; r.style.width = col.w+'px';
-    r.style.top = (y - g.rule/2)+'px'; r.style.height = g.rule+'px';
-    r.style.opacity = 0;
+  lines.forEach(y=>{
+    const r=document.createElement('div'); r.className='rule';
+    Object.assign(r.style,{left:col.x+'px', width:col.w+'px',
+      top:(y-rule/2)+'px', height:rule+'px', opacity:0});
     host.appendChild(r);
   });
-  if(g.tab){
-    const v = document.createElement('div');
-    v.className = 'rule';
-    v.style.left = col.x+'px'; v.style.width = g.rule+'px';
-    v.style.top = (L[0]-g.rule/2)+'px'; v.style.height = (L[3]-L[0]+g.rule)+'px';
-    v.style.opacity = 0;
+  if(tab){
+    const v=document.createElement('div'); v.className='rule';
+    Object.assign(v.style,{left:col.x+'px', width:rule+'px',
+      top:(lines[0]-rule/2)+'px', height:(lines[3]-lines[0]+rule)+'px', opacity:0});
     host.appendChild(v);
   }
 }
 
-/* Capsule width is derived from the longest label so the type always fits:
-   padding at each rounded end = half the height, height = width / 5,
-   which solves to  width = 1.25 x text width. */
+/* Tap zones over the stone itself. Bounded by the same four y values as the
+   gold lines, spanning the full stone width — a tap anywhere in the top third
+   counts as hieroglyphic, including the blank reconstructed area. */
+function buildStoneZones(){
+  const host = $('slots'), L = A.layout, c = cfgFor();
+  document.querySelectorAll('.stonezone').forEach(n=>n.remove());
+  const x0 = toScreen(L, c.stoneX[0], 0).x, x1 = toScreen(L, c.stoneX[1], 0).x;
+  const ys = c.slotY.map(y => toScreen(L, 0, y).y);
+  const clipL = L.win.x, clipR = L.win.x + L.win.w;
+  const clipT = L.win.y, clipB = L.win.y + L.win.h;
+  for(let i=0;i<3;i++){
+    const left = Math.max(x0, clipL), right = Math.min(x1, clipR);
+    const top = Math.max(ys[i], clipT), bot = Math.min(ys[i+1], clipB);
+    if(right<=left || bot<=top) continue;
+    const z = document.createElement('div');
+    z.className='stonezone'; z.dataset.index=i;
+    Object.assign(z.style,{left:left+'px', top:top+'px',
+                           width:(right-left)+'px', height:(bot-top)+'px'});
+    z.addEventListener('pointerup', ()=> tryPlace(i));
+    host.appendChild(z);
+  }
+}
+
 function capMetrics(){
   const fs = S(CFG.type.cap);
-  const c = document.createElement('canvas').getContext('2d');
-  c.font = `300 ${fs}px Karla, sans-serif`;
-  const tw = Math.max(...CFG.labels.map(l => c.measureText(l).width));
-  const w = 1.25 * tw;
-  return { w, h: w/5, gap: w/10, fs };
+  const ctx = document.createElement('canvas').getContext('2d');
+  ctx.font = `300 ${fs}px Karla, sans-serif`;
+  const tw = Math.max(...CFG.labels.map(l => ctx.measureText(l).width));
+  const w = 1.25*tw;
+  return {w, h:w/5, gap:w/10, fs};
 }
 
-function buildBank(g){
-  const M = capMetrics();
-  const host = $('ui');
-  Object.values(A.caps).forEach(el=>el.remove());
-  A.caps = {};
-
+function buildBank(){
+  const M = capMetrics(), tab = isTablet(), L = A.layout, W = vw(), H = vh();
+  Object.values(A.caps).forEach(el=>el.remove()); A.caps={};
+  const {uiW} = slotGeom();
+  const bankX = tab ? L.win.w + uiW/2 + (uiW/2 - M.w)/2 : S(CFG.px.margin);
   const tH = $('title').getBoundingClientRect().height || S(CFG.type.title);
-  const startY = g.tab
-    ? (g.H - (3*M.h + 2*M.gap))/2
-    : parseFloat($('title').style.top) + tH + 0.04*g.H;
-  const startX = g.tab
-    ? g.bankCol.x + (g.bankCol.w - M.w)/2
-    : g.m;
-
+  const bankY = tab ? (H - (3*M.h + 2*M.gap))/2
+                    : parseFloat($('title').style.top) + tH + 0.04*H;
   CFG.labels.forEach((label,i)=>{
-    const el = document.createElement('div');
-    el.className = 'cap';
-    el.textContent = label;
-    el.dataset.label = label;
-    Object.assign(el.style,{
-      left:startX+'px', top:(startY + i*(M.h+M.gap))+'px',
-      width:M.w+'px', height:M.h+'px',
-      borderWidth:g.border+'px', borderRadius:(M.h/2)+'px',
-      fontSize:M.fs+'px', opacity:0, pointerEvents:'auto'
-    });
-    el.dataset.homeLeft = startX; el.dataset.homeTop = (startY + i*(M.h+M.gap));
-    attachPointer(el);
-    host.appendChild(el);
-    A.caps[label] = el;
-  });
-}
-
-/* ---- input: drag and tap-to-place share one path ---- */
-function attachPointer(el){
-  let sx=0, sy=0, dragging=false, clone=null, ox=0, oy=0;
-
-  el.addEventListener('pointerdown', e=>{
-    if(A.locked.has(el.dataset.label)) return;
-    sx=e.clientX; sy=e.clientY; dragging=false;
-    el.setPointerCapture(e.pointerId);
-  });
-
-  el.addEventListener('pointermove', e=>{
-    if(A.locked.has(el.dataset.label)) return;
-    if(!dragging && Math.hypot(e.clientX-sx, e.clientY-sy) > CFG.dragThreshold){
-      dragging = true;
-      disarm();
-      const r = el.getBoundingClientRect();
-      ox = sx - r.left; oy = sy - r.top;
-      clone = el.cloneNode(true);
-      clone.style.opacity = 1; clone.style.position='fixed'; clone.style.pointerEvents='none';
-      $('drag-layer').appendChild(clone);
-      el.classList.add('ghost');
-      armSlots(true);
-    }
-    if(dragging){
-      clone.style.left = (e.clientX-ox)+'px';
-      clone.style.top  = (e.clientY-oy)+'px';
-    }
-  });
-
-  el.addEventListener('pointerup', e=>{
-    if(A.locked.has(el.dataset.label)) return;
-    if(dragging){
-      const slot = slotAt(e.clientX, e.clientY);
-      clone.remove(); clone=null; dragging=false;
-      el.classList.remove('ghost');
-      armSlots(false);
-      if(slot !== null) resolve(el, slot);
-    } else {
+    const el=document.createElement('div');
+    el.className='cap'; el.textContent=label; el.dataset.label=label;
+    Object.assign(el.style,{left:bankX+'px', top:(bankY+i*(M.h+M.gap))+'px',
+      width:M.w+'px', height:M.h+'px', borderWidth:S(CFG.px.border)+'px',
+      borderRadius:(M.h/2)+'px', fontSize:M.fs+'px', opacity:0, pointerEvents:'auto'});
+    el.dataset.homeLeft = bankX; el.dataset.homeTop = bankY + i*(M.h+M.gap);
+    el.addEventListener('pointerup', ()=>{
+      if(A.busy || A.locked.has(label)) return;
       if(A.armed === el) disarm();
       else { disarm(); A.armed = el; el.classList.add('armed'); armSlots(true); }
-    }
+    });
+    $('ui').appendChild(el); A.caps[label]=el;
   });
 }
 
-function slotAt(x,y){
-  for(let i=0;i<A.slotEls.length;i++){
-    if(A.placed[i] !== undefined) continue;
-    const r = A.slotEls[i].getBoundingClientRect();
-    if(x>=r.left && x<=r.right && y>=r.top && y<=r.bottom) return i;
-  }
-  return null;
-}
-function disarm(){
-  if(A.armed){ A.armed.classList.remove('armed'); A.armed=null; }
-  armSlots(false);
-}
-/* While an icon is armed, every open slot fills #D9DDDC to show it is droppable. */
+function disarm(){ if(A.armed){ A.armed.classList.remove('armed'); A.armed=null; } armSlots(false); }
 function armSlots(on){
-  A.slotEls.forEach((s,i)=>{
-    if(A.placed[i]!==undefined) return;
-    s.style.background = on ? 'var(--grey)' : 'transparent';
-  });
+  A.slotEls.forEach((s,i)=>{ if(A.placed[i]!==undefined) return;
+    s.style.background = on ? 'var(--grey)' : 'transparent'; });
 }
 
-$('slots').addEventListener('pointerup', e=>{
-  if(!A.armed) return;
-  const i = slotAt(e.clientX, e.clientY);
-  if(i!==null){ const el=A.armed; disarm(); resolve(el, i); }
-});
-
-function resolve(el, i){
-  const label = el.dataset.label;
+async function tryPlace(i){
+  if(A.busy || !A.armed || A.placed[i]!==undefined) return;
+  A.busy = true;
+  const el = A.armed, label = el.dataset.label;
+  disarm();
   const correct = (CFG.answer[i] === label);
+
+  /* Full-screen feedback first, colour change after — per 260810. */
+  await flashAnswer(correct);
+
   const slot = A.slotEls[i];
-
   if(correct){
-    A.placed[i] = label;
-    A.locked.add(label);
-    slot.style.background = 'var(--green)';
+    A.placed[i]=label; A.locked.add(label);
+    slot.style.background='var(--green)';
     Audio_.ding();
-    /* Icon moves into the slot, centred. Its bank position stays empty —
-       nothing reflows, so the layout never shifts under the user's finger. */
-    const sr = slot.getBoundingClientRect();
-    const M = capMetrics();
+    const sr = slot.getBoundingClientRect(), M = capMetrics();
     el.classList.add('placed');
-    el.classList.remove('armed');
-    el.style.transition = 'left .18s ease, top .18s ease';
-    el.style.left = (sr.left + (sr.width - M.w)/2)+'px';
-    el.style.top  = (sr.top  + (sr.height - M.h)/2)+'px';
-
-    if(Object.keys(A.placed).length === 3){
-      setTimeout(beat4, CFG.t.winHold*1000);
-    }
+    el.style.transition='left .18s ease, top .18s ease';
+    el.style.left=(sr.left+(sr.width-M.w)/2)+'px';
+    el.style.top =(sr.top +(sr.height-M.h)/2)+'px';
+    A.busy = false;
+    if(Object.keys(A.placed).length===3) setTimeout(beat6, CFG.t.winHold*1000);
   } else {
-    slot.style.background = 'var(--red)';
+    slot.style.background='var(--red)';
     Audio_.buzz();
-    el.style.left = el.dataset.homeLeft+'px';
-    el.style.top  = el.dataset.homeTop+'px';
-    setTimeout(()=>{
-      if(A.placed[i]===undefined) slot.style.background='transparent';
-    }, CFG.t.wrongHold*1000);
+    el.style.left=el.dataset.homeLeft+'px';
+    el.style.top =el.dataset.homeTop+'px';
+    A.busy = false;
+    setTimeout(()=>{ if(A.placed[i]===undefined) slot.style.background='transparent'; },
+               CFG.t.wrongHold*1000);
   }
 }
 
-/* =================== beat 4 =================== */
-function beat4(){
-  A.beat = 4;
-  const g = A.geo;
-  const b4 = $('b4'), tx = $('b4-text'), nx = $('next');
+async function flashAnswer(correct){
+  const a = $('answer'), im = $('answer-img');
+  im.src = correct ? CFG.paths.correct : CFG.paths.incorrect;
+  const g = Math.min(vw(), vh()) * 0.30;
+  im.style.width = g+'px'; im.style.height='auto';
+  a.style.background = correct ? 'var(--green)' : 'var(--red)';
+  a.style.transition = `opacity ${CFG.t.fade}s ease`;
+  a.style.opacity = 1;
+  await wait(CFG.t.answerHold*1000);
+  a.style.opacity = 0;
+  await wait(CFG.t.fade*1000);
+}
 
-  b4.style.transition = `opacity ${CFG.t.b4Fade}s ease, backdrop-filter ${CFG.t.b4Fade}s ease, -webkit-backdrop-filter ${CFG.t.b4Fade}s ease, background-color ${CFG.t.b4Fade}s ease`;
-  b4.style.pointerEvents = 'auto';
-
-  tx.style.fontSize = S(CFG.type.b4)+'px';
-  tx.style.top = (g.H/2 - S(CFG.type.b4)/2)+'px';
-  fitOneLine(tx, g.W - 2*g.m, CFG.type.b4);
-
+/* =================== beat 6 =================== */
+function beat6(){
+  A.beat = 6;
+  const b6=$('b6'), tx=$('b6-text'), nx=$('next');
+  b6.style.transition = `opacity ${CFG.t.b6Fade}s ease, backdrop-filter ${CFG.t.b6Fade}s ease, -webkit-backdrop-filter ${CFG.t.b6Fade}s ease, background-color ${CFG.t.b6Fade}s ease`;
+  b6.style.pointerEvents='auto';
+  tx.style.fontSize=S(CFG.type.b6)+'px';
+  tx.style.top=(vh()/2 - S(CFG.type.b6)/2)+'px';
+  fitOneLine(tx, vw()-2*S(CFG.px.margin), CFG.type.b6);
   requestAnimationFrame(()=>{
-    b4.style.opacity = 1;
-    b4.style.backdropFilter = b4.style.webkitBackdropFilter = `blur(${S(CFG.b4.blur)}px)`;
-    b4.style.background = `rgba(0,0,0,${CFG.b4.darken})`;
-    tx.style.transition = `opacity ${CFG.t.b4Fade}s ease`;
-    tx.style.opacity = 1;
+    b6.style.opacity=1;
+    b6.style.backdropFilter=b6.style.webkitBackdropFilter=`blur(${S(CFG.b6.blur)}px)`;
+    b6.style.background=`rgba(0,0,0,${CFG.b6.darken})`;
+    tx.style.transition=`opacity ${CFG.t.b6Fade}s ease`; tx.style.opacity=1;
   });
-
   setTimeout(()=>{
     styleButton(nx,'NEXT');
-    nx.style.transition = `opacity ${CFG.t.b4Fade}s ease`;
-    nx.style.opacity = 1;
-    nx.style.pointerEvents = 'auto';
-    nx.onclick = endChapter;
-  }, (CFG.t.b4Fade + CFG.t.b4Btn)*1000);
+    nx.style.transition=`opacity ${CFG.t.b6Fade}s ease`;
+    nx.style.opacity=1; nx.style.pointerEvents='auto';
+    nx.onclick=endChapter;
+  }, (CFG.t.b6Fade + CFG.t.b6Btn)*1000);
 }
-
 function endChapter(){
-  /* Chapter 2 opens here. It must call unpause() and re-acquire the target —
-     by design the visitor has lowered the phone during the frozen puzzle. */
-  const sys = document.querySelector('a-scene').systems['mindar-image-system'];
   document.dispatchEvent(new CustomEvent('hmane:chapter-complete',{detail:{chapter:1}}));
-  console.log('Chapter 1 complete. Chapter 2 should call arSystem.unpause().');
-  // sys.unpause();
+  console.log('Chapter 1 complete. Chapter 2 should call arSystem.unpause() and re-acquire.');
 }
 
 /* =================== start gate =================== */
-/* MindAR runs with autoStart:false. The camera prompt and the AudioContext
-   unlock both fire from this tap, which is the only thing iOS accepts. */
 (function(){
-  const gate = $('gate'), sub = $('gate-sub'), scene = document.querySelector('a-scene');
-  let ready = false;
-
-  const size = () => {
-    $('gate-title').style.fontSize = S(CFG.type.title)+'px';
-    sub.style.fontSize = S(CFG.type.body)+'px';
-  };
+  const gate=$('gate'), sub=$('gate-sub'), scene=document.querySelector('a-scene');
+  let ready=false;
+  const size=()=>{ $('gate-title').style.fontSize=S(CFG.type.title)+'px';
+                   sub.style.fontSize=S(CFG.type.body)+'px'; };
   size(); window.addEventListener('resize', size);
-
-  const markReady = () => {
-    if(ready) return;
-    ready = true;
-    gate.classList.add('ready');
-    sub.textContent = 'Tap anywhere to begin';
-  };
+  const markReady=()=>{ if(ready)return; ready=true; gate.classList.add('ready');
+                        sub.textContent='Tap anywhere to begin'; };
   if(scene.hasLoaded) markReady(); else scene.addEventListener('loaded', markReady);
-
-  gate.addEventListener('pointerup', () => {
+  gate.addEventListener('pointerup', ()=>{
     if(!ready) return;
-    try{
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if(AC){ const c = new AC(); c.resume(); Audio_.ctx = c; }
-    }catch(e){ console.warn('audio unlock failed', e); }
-
-    const sys = scene.systems['mindar-image-system'];
-    try{ sys.start(); }
-    catch(e){ console.error('mindar start failed', e); sub.textContent = 'Camera unavailable'; return; }
-
-    gate.style.transition = 'opacity .3s ease';
-    gate.style.opacity = 0;
-    setTimeout(()=> gate.style.display = 'none', 300);
+    try{ const AC=window.AudioContext||window.webkitAudioContext;
+         if(AC){ const c=new AC(); c.resume(); Audio_.ctx=c; } }
+    catch(e){ console.warn('audio unlock failed', e); }
+    try{ scene.systems['mindar-image-system'].start(); }
+    catch(e){ console.error('mindar start failed', e); sub.textContent='Camera unavailable'; return; }
+    gate.style.transition='opacity .3s ease'; gate.style.opacity=0;
+    setTimeout(()=> gate.style.display='none', 300);
   });
 })();
 
 /* =================== orientation guard =================== */
-/* iOS Safari has no Screen Orientation Lock API, so "locked" is a guard:
-   hold state and cover the screen until the device is turned back. */
-let lastTab = null;
+/* iOS has no Screen Orientation Lock API, so "locked" is a guard: hold state
+   and cover the screen until the device is turned back. */
 function orientationGuard(){
-  const tab = isTablet();
   const isPhoneDevice = Math.min(screen.width, screen.height) < 500;
-  const wrong = isPhoneDevice ? tab : !tab;
-  const r = $('rotate');
+  const wrong = isPhoneDevice ? isTablet() : !isTablet();
+  const r=$('rotate');
   r.style.display = wrong ? 'flex' : 'none';
   r.style.fontSize = S(CFG.type.title)+'px';
   r.textContent = isPhoneDevice ? CFG.copy.rotatePhone : CFG.copy.rotateTablet;
 }
 window.addEventListener('resize', ()=>{
   orientationGuard();
-  if(A.beat >= 1.5){
-    A.geo = geometry();
-    paintStill(A.beat < 2);
-    if(A.beat >= 2) layoutBeat2();
-    if(A.beat >= 3){ buildSlots(A.geo); buildBank(A.geo);
-      [...A.slotEls].forEach(e=>e.style.opacity=1);
-      document.querySelectorAll('.rule').forEach(e=>e.style.opacity=1);
-      Object.values(A.caps).forEach(e=>e.style.opacity=1);
+  if(A.beat >= 4){
+    applyStill(stillLayout('window'), 0);
+    layoutBeat4(); showZoomButton();
+    if(A.beat >= 5){
+      buildSlots(); buildStoneZones(); buildBank();
+      [...A.slotEls, ...Object.values(A.caps), ...document.querySelectorAll('.rule')]
+        .forEach(e=> e.style.opacity=1);
+      Object.entries(A.placed).forEach(([i,label])=>{
+        A.slotEls[i].style.background='var(--green)';
+        const el=A.caps[label], sr=A.slotEls[i].getBoundingClientRect(), M=capMetrics();
+        el.classList.add('placed');
+        el.style.left=(sr.left+(sr.width-M.w)/2)+'px';
+        el.style.top =(sr.top +(sr.height-M.h)/2)+'px';
+      });
     }
+  } else if(A.beat >= 2){
+    applyStill(stillLayout('full'), 0);
+    layoutVeil();
   }
 });
 orientationGuard();
 
-/* =================== calibration mode (?cal=1) =================== */
-const CAL = new URLSearchParams(location.search).get('cal') === '1';
+/* =================== calibration (?cal=1) =================== */
+const CAL = new URLSearchParams(location.search).get('cal')==='1';
 if(CAL){
-  $('cal').style.display = 'block';
-  const m = $('stone-model');
-  const get = a => m.getAttribute(a);
-  const p = get('position'), s = get('scale'), r = get('rotation');
-  const map = {cx:p.x, cy:p.y, cz:p.z, cs:s.x, cr:r.z};
-  Object.entries(map).forEach(([id,v])=> $(id).value = v);
-  const sync = () => {
-    const P = {x:+$('cx').value, y:+$('cy').value, z:+$('cz').value};
-    const sc = +$('cs').value, rz = +$('cr').value;
-    m.setAttribute('position', P);
-    m.setAttribute('scale', {x:sc,y:sc,z:sc});
-    m.setAttribute('rotation', {x:0,y:0,z:rz});
+  $('cal').style.display='block';
+  const m=$('stone-model');
+  const p=m.getAttribute('position'), s=m.getAttribute('scale'), r=m.getAttribute('rotation');
+  Object.entries({cx:p.x,cy:p.y,cz:p.z,cs:s.x,cr:r.z}).forEach(([id,v])=> $(id).value=v);
+  const sync=()=>{
+    const P={x:+$('cx').value,y:+$('cy').value,z:+$('cz').value};
+    const sc=+$('cs').value, rz=+$('cr').value;
+    m.setAttribute('position',P); m.setAttribute('scale',{x:sc,y:sc,z:sc});
+    m.setAttribute('rotation',{x:0,y:0,z:rz});
     $('vx').textContent=P.x.toFixed(3); $('vy').textContent=P.y.toFixed(3);
     $('vz').textContent=P.z.toFixed(3); $('vs').textContent=sc.toFixed(3);
     $('vr').textContent=rz.toFixed(1);
-    $('calout').textContent =
-      `position="${P.x.toFixed(3)} ${P.y.toFixed(3)} ${P.z.toFixed(3)}" scale="${sc.toFixed(3)} ${sc.toFixed(3)} ${sc.toFixed(3)}" rotation="0 0 ${rz.toFixed(1)}"`;
+    $('calout').textContent=`position="${P.x.toFixed(3)} ${P.y.toFixed(3)} ${P.z.toFixed(3)}" scale="${sc.toFixed(3)} ${sc.toFixed(3)} ${sc.toFixed(3)}" rotation="0 0 ${rz.toFixed(1)}"`;
   };
   ['cx','cy','cz','cs','cr'].forEach(id=> $(id).addEventListener('input', sync));
   sync();
-  /* Keep the model visible while calibrating. */
-  $('stone-target').addEventListener('targetFound', ()=> setTimeout(()=>setModelOpacity(1), 100));
+  $('stone-target').addEventListener('targetFound', ()=> setTimeout(()=>setModelOpacity(1),100));
 }
 
-/* Skip straight to a beat for desktop testing: ?beat=2 / 3 / 4 */
+/* =================== desktop testing: ?beat=2..6 =================== */
 const SKIP = new URLSearchParams(location.search).get('beat');
 if(SKIP){
-  window.addEventListener('load', ()=> setTimeout(()=>{
-    $('gate').style.display='none';        // skip the start gate too
+  window.addEventListener('load', ()=> setTimeout(async ()=>{
+    $('gate').style.display='none';
     $('ar-wrap').style.display='none';
-    A.geo = geometry();
-    $('still-img').src = A.geo.tab ? CFG.paths.stillTablet : CFG.paths.stillPhone;
-    $('still-win').style.opacity = 1;
-    paintStill(false);
-    $('ui-bg').style.opacity = 1;
-    layoutBeat2(); show($('title'));
-    if(SKIP==='2'){ show($('body')); show($('play')); }
-    if(SKIP==='3'){ beat3(); }
-    if(SKIP==='4'){ beat3(); beat4(); }
-  }, 400));
+    $('still-img').src = isTablet() ? CFG.paths.stillTablet : CFG.paths.stillPhone;
+    $('still-win').style.opacity=1;
+    const n = +SKIP;
+    if(n === 2){ applyStill(stillLayout('full'),0);
+                 const veil=$('veil'); layoutVeil();
+                 veil.style.opacity=1; veil.style.pointerEvents='auto';
+                 veil.style.backdropFilter=veil.style.webkitBackdropFilter=`blur(${S(CFG.b6.blur)}px)`;
+                 veil.style.background=`rgba(0,0,0,${CFG.b6.darken})`;
+                 show($('v-title')); show($('v-body'));
+                 styleButton($('v-next'),'NEXT'); show($('v-next'));
+                 $('v-next').onclick=()=>{ ['v-title','v-body','v-next'].forEach(i=>hide($(i)));
+                   veil.style.opacity=0; veil.style.pointerEvents='none';
+                   veil.style.backdropFilter=veil.style.webkitBackdropFilter='blur(0px)';
+                   veil.style.background='rgba(0,0,0,0)'; setTimeout(beat3,200); }; }
+    else if(n === 3){ beat3(); }
+    else { applyStill(stillLayout('window'),0);
+           $('ui-bg').style.opacity=1; A.beat=4;
+           layoutBeat4(); show($('title')); showZoomButton();
+           if(n===4){ show($('body')); show($('play')); }
+           if(n===5){ beat5(); }
+           if(n===6){ beat5(); beat6(); } }
+  }, 500));
 }
 </script>
 </body>
