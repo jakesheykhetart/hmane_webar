@@ -88,14 +88,13 @@
   #c2-title{color:var(--gold);text-transform:uppercase;line-height:1.15;}
   #c2-body{color:var(--grey);line-height:1.45;}
   #c2-prompt{color:var(--gold);text-transform:uppercase;text-align:center;line-height:1.2;}
-  /* Re-acquisition prompt. Deliberately NOT blurred or darkened like the
-     "move closer" overlay — the visitor has to see the camera feed to aim it.
-     A translucent navy pill keeps the type readable against any wall. */
-  #c2-acquire{position:fixed;z-index:15;left:0;right:0;text-align:center;
-              color:var(--gold);text-transform:uppercase;line-height:1.25;
-              opacity:0;pointer-events:none;}
-  #c2-acquire span{display:inline-block;background:rgba(0,0,102,.72);
-                   border-radius:999px;}
+  /* Re-acquisition label. Full-bleed navy bar with a gold border, sitting just
+     off the bottom edge. Deliberately NOT blurred or darkened like the
+     "move closer" overlay — the visitor has to see the camera feed to aim it. */
+  #c2-acquire{position:fixed;z-index:15;left:0;right:0;
+              background:var(--navy);border-style:solid;border-color:var(--gold);
+              color:var(--gold);text-transform:uppercase;text-align:center;
+              line-height:1.25;opacity:0;pointer-events:none;}
   #c2-audio{cursor:pointer;}
   .c2-btn{position:absolute;background:var(--navy);border-style:solid;border-color:var(--gold);
           display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -187,7 +186,7 @@
   <img id="c2-audio" src="./assets/images/audio-icon.png" alt="Play sound">
   <div id="c2-next" class="btn">Next</div>
 </div>
-<div id="c2-acquire"><span></span></div>
+<div id="c2-acquire"></div>
 <audio id="c2-wedj" src="./assets/audio/wedj.m4a" preload="auto"></audio>
 
 <div id="viewer"><img id="viewer-img" alt=""><img id="viewer-close" src="./assets/images/zoom-icon.png" alt="Close"></div>
@@ -950,6 +949,16 @@ const CH2 = {
   /* Stele extent in the same space, used to measure how close the visitor is. */
   stele: { x0:372, x1:1916, y0:17, y1:3188 },
 
+  /* The SAME line, expressed in each still's own space, for the no-AR fallback.
+     Derived from the target-space band by similarity transform: the x-extent
+     was independently confirmed against a hand-drawn annotation to within 5px.
+     Both paths must highlight the same line, because both lead to the same
+     hieroglyphic-line.jpg close-up. */
+  stillBand: {
+    phone : { x0:277, x1:1096, yc:1134, h:38 },   // 1400 x 2100 space
+    tablet: { x0:912, x1:1552, yc:867,  h:29 }    // 2560 x 1600 space
+  },
+
   /* Line image 4000 x 189. red = the zoom's landing frame AND the rect the
      zoomed image is placed into. blue = crossfade trigger, x-extent only —
      its height is irrelevant and always was. */
@@ -965,6 +974,12 @@ const CH2 = {
 
   /* Fraction of screen HEIGHT the stele must fill before we freeze. */
   closeFrac: { phone:0.75, tablet:0.85 },
+
+  /* How long to wait for the visitor to raise the phone before giving up on AR
+     and running the still fallback. 3s is brisk — someone mid-lift could just
+     miss it. One number to change if it proves too tight in the gallery. */
+  acquireTimeout: 3.0,
+  fallbackHold: 1.0,
 
   t: { fadeIn:1.5, hold:2.0, settle:0.5, timeout:3.0,
        bandFade:0.5, bandHold:1.0, promptFade:0.5,
@@ -982,6 +997,12 @@ const CH2 = {
      height. Never binds on a phone; on a landscape tablet it is what keeps the
      question and buttons on screen. */
   stageCapFrac: 0.40,
+
+  /* Target centreline for the zoomed image during beats 8 and 9, as a fraction
+     of screen height. Treated as a target rather than a fixed value — see
+     explainStageY(). */
+  stageCentreFrac: 0.375,
+  stageMinTopFrac: 0.03,
 
   copy: {
     prompt   : 'Tap the highlighted line',
@@ -1091,25 +1112,63 @@ async function startChapter2(){
 
   /* Prompt, unless the target is found straight away — no point flashing it at
      a visitor who never lowered the phone. */
-  let found = false;
-  const promptTimer = setTimeout(()=>{ if(!found) showAcquire(); }, 400);
-  await new Promise(res=>{
-    const onFound = () => { target.removeEventListener('targetFound', onFound); res(); };
-    target.addEventListener('targetFound', onFound);
-  });
-  found = true;
+  let settled = false;
+  const promptTimer = setTimeout(()=>{ if(!settled) showAcquire(); }, 400);
+  let onFound;
+  const outcome = await Promise.race([
+    new Promise(res=>{ onFound = () => res('found'); target.addEventListener('targetFound', onFound); }),
+    wait(CH2.acquireTimeout*1000).then(()=> 'timeout')
+  ]);
+  settled = true;
   clearTimeout(promptTimer);
+  target.removeEventListener('targetFound', onFound);
   hideAcquire();
-  c2beat1();
+
+  if(outcome === 'found') c2beat1();
+  else c2fallback();          // never raised the phone — run the still path
+}
+
+/* =================== fallback — no AR at all =================== */
+/* If the visitor never points the device at the stone, the chapter still has to
+   work. Drop the live AR entirely and run the same sequence against the
+   art-directed still. The move-closer beat is skipped — there is nothing to
+   move closer to — and beats 4 onward are shared with the AR path, so the tap,
+   the cut and the zoom all behave identically. */
+async function c2fallback(){
+  A.beat = 22;
+  try { document.querySelector('a-scene').systems['mindar-image-system'].pause(); }
+  catch(e){ console.warn('pause failed', e); }
+  $('ar-wrap').style.display = 'none';
+  document.querySelectorAll('.mindar-ui-overlay').forEach(n=>n.style.display='none');
+
+  const sw = $('still-win');
+  sw.style.display = ''; sw.classList.remove('blend');
+  sw.style.transition = ''; sw.style.opacity = 1;
+  $('still-img').src = isTablet() ? CFG.paths.stillTablet : CFG.paths.stillPhone;
+  applyStill(stillLayout('full'), 0);
+
+  await wait(CH2.fallbackHold*1000);      // one second of just the image
+
+  C2.band = bandRectFromStill();
+  c2beat3();
+}
+
+/* The band in still space -> screen, using chapter 1's still placement engine. */
+function bandRectFromStill(){
+  const L = A.layout;
+  const b = CH2.stillBand[isTablet() ? 'tablet' : 'phone'];
+  const a = toScreen(L, b.x0, b.yc - b.h/2);
+  const c = toScreen(L, b.x1, b.yc + b.h/2);
+  return { x:a.x, y:a.y, w:c.x-a.x, h:c.y-a.y };
 }
 
 function showAcquire(){
-  const el = $('c2-acquire'), sp = el.firstElementChild;
-  sp.textContent = CH2.copy.acquire;
-  sp.style.fontSize = S(CFG.type.title)+'px';
-  sp.style.padding = `${S(14)}px ${S(22)}px`;
-  sp.style.maxWidth = (vw() - 2*S(CFG.px.margin))+'px';
-  el.style.bottom = (0.12*vh())+'px';
+  const el = $('c2-acquire');
+  el.textContent = CH2.copy.acquire;
+  el.style.fontSize = S(CFG.type.title)+'px';
+  el.style.borderWidth = (vw()*CH2.borderFrac)+'px';
+  el.style.padding = `${S(18)}px ${S(16)}px`;
+  el.style.bottom = (0.01*vh())+'px';
   fadeEl(el, 1, CH2.t.promptFade);
 }
 function hideAcquire(){ fadeEl($('c2-acquire'), 0, CH2.t.promptFade); }
@@ -1259,8 +1318,16 @@ function finalStage(){
   const W = vw(), H = vh(), R = CH2.line.red;
   const ar = (R.x1-R.x0)/(R.y1-R.y0);
   let w = W, h = W/ar;
-  const cap = H * CH2.stageCapFrac;
-  if(h > cap){ h = cap; w = h*ar; }
+  /* Two caps. The first is the plain 40% ceiling. The second is what beats 8
+     and 9 actually leave room for: with Safari's chrome showing, the viewport
+     drops from ~844pt to ~525pt and the body copy would otherwise run straight
+     through the NEXT button. Sizing the image here rather than shrinking it
+     later keeps it from jumping between beat 6 and beat 8. */
+  const capFixed = H * CH2.stageCapFrac;
+  const bf = CH2.zoomed.phonogram.y1 / CH2.zoomed.h;
+  const capFit = (H - buttonZone() - explainCopyHeight() - CH2.stageMinTopFrac*H) / bf;
+  const cap = Math.min(capFixed, capFit);
+  if(h > cap){ h = Math.max(cap, H*0.18); w = h*ar; }
   return { x:(W-w)/2, y:H/2 - h/2, w, h };
 }
 
@@ -1305,7 +1372,56 @@ function c2next(){
 }
 
 /* =================== 8 / 9 — phonogram, determinative =================== */
+/* Height of the reserved strip at the bottom holding NEXT and the audio icon. */
+function buttonZone(){
+  return S(CFG.type.btn) + 2*S(8) + 2*S(CFG.px.border) + S(CFG.px.margin) + S(14);
+}
+
+/* Where the zoomed image sits during beats 8 and 9.
+   Target is a centreline at 37.5% of screen height. That is comfortable with
+   Safari's chrome hidden, but with the URL bar and toolbar showing the viewport
+   is roughly 525pt rather than 844 and the body copy runs into the NEXT button.
+   So 37.5% is a target, not a promise — the image moves further up if the copy
+   below it needs the room. Computed once from the longer of the two bodies so
+   the image does not jump between beat 8 and beat 9. */
+/* Vertical space the copy needs below the highlight, taking the longer of the
+   two bodies so beats 8 and 9 share one image position and nothing jumps. */
+function explainCopyHeight(){
+  if(C2.copyH != null) return C2.copyH;
+  const H = vh(), W = vw(), m = S(CFG.px.margin);
+  const probe = document.createElement('div');
+  probe.style.cssText = `position:absolute;visibility:hidden;left:0;top:0;
+    width:${Math.min(W*0.75 - m, W - 2*m)}px;font-family:'Karla',sans-serif;font-weight:300;`;
+  document.body.appendChild(probe);
+  const measure = (txt,px,caps)=>{ probe.style.fontSize=px+'px';
+    probe.style.textTransform = caps?'uppercase':'none';
+    probe.style.lineHeight = caps?1.15:1.45;
+    probe.textContent = txt; return probe.getBoundingClientRect().height; };
+  let worst = 0;
+  [[CH2.copy.t8,CH2.copy.b8],[CH2.copy.t9,CH2.copy.b9]].forEach(([tt,bb])=>{
+    const need = 0.07*H + measure(tt,S(CFG.type.title),true)
+               + 0.015*H + measure(bb,S(CFG.type.body),false);
+    if(need > worst) worst = need;
+  });
+  probe.remove();
+  C2.copyH = worst;
+  return worst;
+}
+
+function explainStageY(){
+  if(C2.explainY != null) return C2.explainY;
+  const H = vh(), st = C2.stage;
+  const bf = CH2.zoomed.phonogram.y1 / CH2.zoomed.h;
+  let y = CH2.stageCentreFrac*H - st.h/2;
+  const overflow = (y + bf*st.h + explainCopyHeight()) - (H - buttonZone());
+  if(overflow > 0) y -= overflow;
+  C2.explainY = Math.max(CH2.stageMinTopFrac*H, y);
+  return C2.explainY;
+}
+
 async function c2explain(box, titleText, bodyText, align, withAudio){
+  C2.stage.y = explainStageY();
+  frame('c2-zoomwrap', C2.stage, true);
   const r = zoomRect(box);
   /* Swap full veil for the holed mask in the same frame — both are the same
      darkness, so it reads as the hole opening rather than a flash. */
@@ -1342,7 +1458,18 @@ async function c2explain(box, titleText, bodyText, align, withAudio){
     a.style.height = hgt+'px'; a.style.width = (hgt*92/72)+'px';
     a.style.left = m+'px'; a.style.bottom = m+'px'; a.style.top='auto';
     a.style.pointerEvents = 'auto';
-    a.onclick = () => { const w=$('c2-wedj'); w.currentTime=0; w.play().catch(e=>console.warn('audio blocked',e)); };
+    a.onclick = () => {
+      const w = $('c2-wedj');
+      try { w.pause(); w.currentTime = 0; } catch(e){}
+      const p = w.play();
+      if(p && p.catch) p.catch(err => {
+        /* A 404 on the m4a and a blocked autoplay look identical from here, so
+           say which. The file living only in the delivery folder and never
+           being committed is the likelier of the two. */
+        console.error('wedj.m4a did not play:', err,
+          '— check assets/audio/wedj.m4a exists in the repo, and that the tap reached this handler');
+      });
+    };
     fadeEl(a, 1, CH2.t.veilFade);
     await wait(CH2.t.nextIn*1000);
   } else {
@@ -1373,9 +1500,15 @@ async function c2beat10(){
   })(); });
   await wait(CH2.t.step*1000);
 
-  const hl = zoomRect(CH2.zoomed.full);
+  /* The hole is the WHOLE image, not the inset "full highlight box" — the
+     quiz asks about all four signs, so all four have to be legible.
+     The veil has to come off in the same frame the mask goes on, or the mask's
+     hole sits underneath it and the image stays darkened. That was the bug. */
+  const hl = { x:C2.stage.x, y:C2.stage.y, w:C2.stage.w, h:C2.stage.h };
   c2mask(hl, 0);
+  $('c2-mask').style.transition = '';
   $('c2-mask').style.opacity = 1;
+  c2veil(false, 0);
   await wait(CH2.t.step*1000);
 
   const t = $('c2-title'), b = $('c2-body');
@@ -1500,6 +1633,7 @@ if(SKIP2){
     $('c2-line').src = CH2.paths.line; $('c2-zoom').src = CH2.paths.zoomed;
     const W=vw(), H=vh();
     C2.band = { x:W*0.10, y:H*0.46, w:W*0.80, h:W*0.80*189/4000 };
+    if(SKIP2 === 'fb'){ c2fallback(); return; }     // the no-AR path, end to end
     const n = +SKIP2;
     if(n<=5){ c2beat5(); }
     else if(n===6){ $('c2-bg').style.opacity=1; frame('c2-linewrap',C2.band,true); c2beat6(); }
