@@ -69,9 +69,30 @@
 
   /* Answer feedback — flat colour field, glyph centred. Built in CSS so it is
      correct on a landscape tablet, where a portrait image would crop or letterbox. */
-  #answer{position:fixed;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;
+  #answer{position:fixed;inset:0;z-index:16;display:flex;align-items:center;justify-content:center;
           opacity:0;pointer-events:none;}
   #answer img{display:block;}
+
+  /* ===================== CHAPTER 2 ===================== */
+  #c2-bg{position:fixed;inset:0;background:var(--navy);opacity:0;z-index:11;pointer-events:none;}
+  #c2-stage{position:fixed;inset:0;z-index:12;pointer-events:none;overflow:hidden;}
+  .c2-frame{position:absolute;border-style:solid;border-color:var(--gold);overflow:hidden;opacity:0;}
+  .c2-frame img{position:absolute;left:0;top:0;width:100%;height:100%;display:block;}
+  #c2-mask{position:fixed;inset:0;z-index:13;pointer-events:none;opacity:0;}
+  #c2-mask div{position:absolute;background:rgba(0,0,0,.55);
+               backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
+  #c2-veil{position:fixed;inset:0;z-index:13;opacity:0;pointer-events:none;background:rgba(0,0,0,0);
+           backdrop-filter:blur(0px);-webkit-backdrop-filter:blur(0px);}
+  #c2-ui{position:fixed;inset:0;z-index:14;pointer-events:none;}
+  #c2-ui>*{position:absolute;opacity:0;}
+  #c2-title{color:var(--gold);text-transform:uppercase;line-height:1.15;}
+  #c2-body{color:var(--grey);line-height:1.45;}
+  #c2-prompt{color:var(--gold);text-transform:uppercase;text-align:center;line-height:1.2;}
+  #c2-audio{cursor:pointer;}
+  .c2-btn{position:absolute;background:var(--navy);border-style:solid;border-color:var(--gold);
+          display:flex;flex-direction:column;align-items:center;justify-content:center;
+          color:var(--gold);text-transform:uppercase;cursor:pointer;opacity:0;line-height:1.1;}
+  .c2-btn small{display:block;}
 
   /* Zoom viewer — look only, no gameplay. */
   #zoom-btn{position:absolute;z-index:6;opacity:0;pointer-events:none;cursor:pointer;}
@@ -143,6 +164,23 @@
 
 <div id="answer"><img id="answer-img" alt=""></div>
 
+<!-- ===================== CHAPTER 2 ===================== -->
+<div id="c2-bg"></div>
+<div id="c2-stage">
+  <div id="c2-linewrap" class="c2-frame"><img id="c2-line" alt=""></div>
+  <div id="c2-zoomwrap" class="c2-frame"><img id="c2-zoom" alt=""></div>
+</div>
+<div id="c2-mask"><div></div><div></div><div></div><div></div></div>
+<div id="c2-veil"></div>
+<div id="c2-ui">
+  <div id="c2-prompt"></div>
+  <div id="c2-title"></div>
+  <div id="c2-body"></div>
+  <img id="c2-audio" src="./assets/images/audio-icon.png" alt="Play sound">
+  <div id="c2-next" class="btn">Next</div>
+</div>
+<audio id="c2-wedj" src="./assets/audio/wedj.m4a" preload="auto"></audio>
+
 <div id="viewer"><img id="viewer-img" alt=""><img id="viewer-close" src="./assets/images/zoom-icon.png" alt="Close"></div>
 
 <div id="gate">
@@ -172,14 +210,25 @@
 const CFG = {
 
   paths: {
+    /* File is 2100x3150 as of 260818. The coordinate space below stays
+       1400x2100 — see the note on phone.w. */
     stillPhone : './assets/images/rosetta-phone.jpg',
     stillTablet: './assets/images/rosetta-tablet.jpg',
     correct    : './assets/images/answer-correct.png',
     incorrect  : './assets/images/answer-incorrect.png'
   },
 
-  /* ---- PHONE still 1400 x 2100 ----
-     slot* are the four gold-line y values and the beat 5 tap-zone boundaries.
+  /* ---- PHONE ----
+     IMPORTANT: w and h are a COORDINATE SPACE, not the file's pixel size.
+     The JPEG is 2100 x 3150 as of 260818, a clean 1.5x rescale of the original
+     1400 x 2100 art — verified, all four stone edges landed within 1.5px of
+     exactly 1.5x. Every coordinate below is still expressed in the ORIGINAL
+     1400 x 2100 space, and the layout engine sizes the <img> from these numbers
+     in CSS pixels, which is independent of the file's intrinsic resolution.
+     So the higher-res file renders sharper at identical positions.
+     If you re-measure anything against the new JPEG, divide by 1.5 first.
+
+     slotY are the four gold-line y values and the beat 5 tap-zone boundaries.
      bands are the beat 3 highlight/zoom rectangles — deliberately a different,
      tighter set covering only the legible script on the surviving fragment. */
   phone : {
@@ -781,7 +830,7 @@ function beat6(){
 }
 function endChapter(){
   document.dispatchEvent(new CustomEvent('hmane:chapter-complete',{detail:{chapter:1}}));
-  console.log('Chapter 1 complete. Chapter 2 should call arSystem.unpause() and re-acquire.');
+  startChapter2();
 }
 
 /* =================== start gate =================== */
@@ -819,6 +868,10 @@ function orientationGuard(){
 }
 window.addEventListener('resize', ()=>{
   orientationGuard();
+  /* Chapter 2 uses beat ids 21+. Its layouts are computed on entry to each
+     beat, and orientation is locked anyway, so don't let chapter 1's reflow
+     path run against elements it no longer owns. */
+  if(A.beat >= 20) return;
   if(A.beat >= 4){
     applyStill(stillLayout('window'), 0);
     layoutBeat4(); showZoomButton();
@@ -863,6 +916,504 @@ if(CAL){
   $('stone-target').addEventListener('targetFound', ()=> setTimeout(()=>setModelOpacity(1),100));
 }
 
+/* ===================================================================
+   CHAPTER 2
+   Built from HMANE ROSETTA STONE AR CHAPTER 2 STORYBOARD 260821
+   Beats: 1 AR resumes · 2 move closer + freeze · 3 highlight the line ·
+          4 tap prompt · 5 instant cut to the line image ·
+          6 exponential zoom + crossfade · 7 question ·
+          8 phonogram · 9 determinative · 10 the quiz
+   =================================================================== */
+
+const CH2 = {
+  paths: {
+    line      : './assets/images/hieroglyphic-line.jpg',
+    zoomed    : './assets/images/stela-zoomed.jpg',
+    audioIcon : './assets/images/audio-icon.png'
+  },
+
+  /* Band to highlight, in the TRACKING TARGET's space (source-01.jpg,
+     2342 x 3288) — NOT the phone still. Anything anchored to live or frozen
+     AR is specified here. Axis-aligned; the two supplied points differ by
+     6.5px in y so the band takes their midpoint. */
+  band: { tw:2342, th:3288, x0:386, x1:1763, yc:1737.75, h:65 },
+
+  /* Stele extent in the same space, used to measure how close the visitor is. */
+  stele: { x0:372, x1:1916, y0:17, y1:3188 },
+
+  /* Line image 4000 x 189. red = the zoom's landing frame AND the rect the
+     zoomed image is placed into. blue = crossfade trigger, x-extent only —
+     its height is irrelevant and always was. */
+  line: { w:4000, h:189,
+          red : {x0:3508, x1:3773, y0:19, y1:168},
+          blue: {x0:3192, x1:3999} },
+
+  /* Regions inside the zoomed image, in ITS space (960 x 520). */
+  zoomed: { w:960, h:520,
+            phonogram    : {x0:358, y0:45, x1:881, y1:473},
+            determinative: {x0:105, y0:45, x1:375, y1:473},
+            full         : {x0:85,  y0:45, x1:890, y1:473} },
+
+  /* Fraction of screen HEIGHT the stele must fill before we freeze. */
+  closeFrac: { phone:0.75, tablet:0.85 },
+
+  t: { fadeIn:1.5, hold:2.0, settle:0.5, timeout:3.0,
+       bandFade:0.5, bandHold:1.0, promptFade:0.5,
+       cutHold:1.0, zoom:2.5, zoomHold:1.0,
+       veilFade:0.25, titleFade:0.5, bodyGap:0.25, bodyFade:0.5,
+       q7Next:0.75, audioIn:1.0, nextIn:1.0, slide:1.0, step:0.25, quizIn:0.5 },
+
+  /* Gold frame thickness — 1.5% of screen width, CONSTANT.
+     The script says it "scales with the zoom", but at 18.9x that would end as
+     a 110px frame swallowing a third of the screen. Held constant instead,
+     which is what the mockups show. */
+  borderFrac: 0.015,
+
+  /* Cap on the resting height of the zoomed image, as a fraction of screen
+     height. Never binds on a phone; on a landscape tablet it is what keeps the
+     question and buttons on screen. */
+  stageCapFrac: 0.40,
+
+  copy: {
+    prompt   : 'Tap the highlighted line',
+    q7       : 'What are phonograms & determinative signs?',
+    t8       : 'Phonogram',
+    b8       : 'This is a cluster of phonograms—symbols that represent sounds rather than objects. Champollion’s breakthrough was recognizing that hieroglyphs represented sounds, not just ideas or objects.',
+    t9       : 'Determinative sign',
+    b9       : 'This is a determinative sign—a symbol that is not pronounced but clarifies the meaning of the word that comes before it.',
+    t10      : 'What do these hieroglyphs mean?',
+    b10      : 'Tap the buttons to guess',
+    moveClose: 'Move phone closer'
+  },
+
+  quiz: [ {label:'STELA', sub:'(CARVED SLAB)', correct:true},
+          {label:'PHARAOH'}, {label:'AVOCADO'}, {label:'STONE'} ]
+};
+
+const C2 = { band:null, stage:null, buttons:[], busy:false };
+
+/* ---- project a TARGET-space pixel into screen space using the tracking pose ----
+   MindAR's anchor is 1 unit = marker width, origin at marker centre, y up. */
+function projectTarget(px, py){
+  const anchor = $('stone-target').object3D;
+  const cam = document.querySelector('a-camera').getObject3D('camera');
+  const T = CH2.band;
+  anchor.updateMatrixWorld(true);
+  const v = new AFRAME.THREE.Vector3((px - T.tw/2)/T.tw, (T.th/2 - py)/T.tw, 0);
+  v.applyMatrix4(anchor.matrixWorld);
+  v.project(cam);
+  return { x:(v.x*0.5+0.5)*vw(), y:(-v.y*0.5+0.5)*vh() };
+}
+function steleScreenFrac(){
+  const S = CH2.stele, mx = (S.x0+S.x1)/2;
+  const a = projectTarget(mx, S.y0), b = projectTarget(mx, S.y1);
+  return Math.abs(b.y - a.y) / vh();
+}
+function bandScreenRect(){
+  const B = CH2.band, hh = B.h/2;
+  const pts = [[B.x0,B.yc-hh],[B.x1,B.yc-hh],[B.x1,B.yc+hh],[B.x0,B.yc+hh]].map(p=>projectTarget(p[0],p[1]));
+  const xs = pts.map(p=>p.x), ys = pts.map(p=>p.y);
+  return { x:Math.min(...xs), y:Math.min(...ys),
+           w:Math.max(...xs)-Math.min(...xs), h:Math.max(...ys)-Math.min(...ys) };
+}
+
+function c2mask(r, seconds){
+  const m = $('c2-mask'), p = m.children, W = vw(), H = vh();
+  const tr = seconds ? `all ${seconds}s ease` : '';
+  const set=(el,o)=>{ el.style.transition=tr; Object.assign(el.style,o); };
+  set(p[0],{left:'0px',top:'0px',width:W+'px',height:Math.max(0,r.y)+'px'});
+  set(p[1],{left:'0px',top:(r.y+r.h)+'px',width:W+'px',height:Math.max(0,H-r.y-r.h)+'px'});
+  set(p[2],{left:'0px',top:r.y+'px',width:Math.max(0,r.x)+'px',height:r.h+'px'});
+  set(p[3],{left:(r.x+r.w)+'px',top:r.y+'px',width:Math.max(0,W-r.x-r.w)+'px',height:r.h+'px'});
+}
+function c2veil(on, seconds){
+  const v = $('c2-veil');
+  v.style.transition = `opacity ${seconds}s ease, backdrop-filter ${seconds}s ease, -webkit-backdrop-filter ${seconds}s ease, background-color ${seconds}s ease`;
+  v.style.opacity = on ? 1 : 0;
+  v.style.backdropFilter = v.style.webkitBackdropFilter = on ? `blur(${S(CFG.b6.blur)}px)` : 'blur(0px)';
+  v.style.background = on ? `rgba(0,0,0,${CFG.b6.darken})` : 'rgba(0,0,0,0)';
+}
+function frame(id, rect, visible){
+  const el = $(id), b = vw()*CH2.borderFrac;
+  el.style.borderWidth = b+'px';
+  el.style.left = (rect.x-b)+'px'; el.style.top = (rect.y-b)+'px';
+  el.style.width = rect.w+'px';    el.style.height = rect.h+'px';
+  if(visible !== undefined) el.style.opacity = visible ? 1 : 0;
+}
+const fadeEl = (el, to, secs) => { el.style.transition = `opacity ${secs}s ease`; el.style.opacity = to; };
+
+/* =================== chapter 2 entry =================== */
+async function startChapter2(){
+  /* tear down chapter 1 */
+  ['b6','ui','ui-bg','still-win','mask','band-label','viewer'].forEach(i=>{
+    const e=$(i); if(e){ e.style.opacity=0; e.style.pointerEvents='none'; } });
+  $('next').onclick = null;
+  setTimeout(()=>{ ['b6','ui','ui-bg','still-win'].forEach(i=>{const e=$(i); if(e) e.style.display='none';}); }, 300);
+
+  $('c2-line').src = CH2.paths.line;
+  $('c2-zoom').src = CH2.paths.zoomed;
+
+  /* resume tracking */
+  $('ar-wrap').style.display = '';
+  document.querySelectorAll('.mindar-ui-overlay').forEach(n=>n.style.display='');
+  setModelOpacity(0);
+  try { document.querySelector('a-scene').systems['mindar-image-system'].unpause(); }
+  catch(e){ console.error('unpause failed', e); }
+
+  A.beat = 21;
+  await new Promise(res=>{
+    const t = $('stone-target');
+    const onFound = () => { t.removeEventListener('targetFound', onFound); res(); };
+    if(t.object3D.visible) res(); else t.addEventListener('targetFound', onFound);
+  });
+  c2beat1();
+}
+
+/* =================== 1 — target found =================== */
+async function c2beat1(){
+  A.beat = 21;
+  Audio_.beat1();
+  const t0 = performance.now(), d = CH2.t.fadeIn*1000;
+  await new Promise(res=>{ (function ramp(){
+    const p = Math.min(1,(performance.now()-t0)/d);
+    setModelOpacity(p);
+    if(p<1) requestAnimationFrame(ramp); else res();
+  })(); });
+  await wait(CH2.t.hold*1000);
+  c2beat2();
+}
+
+/* =================== 2 — move closer, then freeze =================== */
+async function c2beat2(){
+  A.beat = 22;
+  const need = isTablet() ? CH2.closeFrac.tablet : CH2.closeFrac.phone;
+  const pr = $('c2-prompt');
+  pr.textContent = CH2.copy.moveClose;
+  pr.style.fontSize = S(CFG.type.title)+'px';
+  pr.style.left = S(CFG.px.margin)+'px';
+  pr.style.width = (vw()-2*S(CFG.px.margin))+'px';
+  pr.style.top = (vh()/2 - S(CFG.type.title))+'px';
+
+  let prompted = false, crossed = null;
+  const t0 = performance.now();
+  await new Promise(res=>{ (function poll(){
+    const f = steleScreenFrac(), el = performance.now()-t0;
+    if(f >= need){
+      if(crossed === null) crossed = performance.now();
+      if(performance.now()-crossed >= CH2.t.settle*1000) return res();
+    } else {
+      crossed = null;
+      if(!prompted && el > 250){ prompted = true; c2veil(true, CH2.t.promptFade); fadeEl(pr,1,CH2.t.promptFade); }
+    }
+    if(el >= CH2.t.timeout*1000) return res();
+    requestAnimationFrame(poll);
+  })(); });
+
+  if(prompted){ c2veil(false, CH2.t.promptFade); fadeEl(pr,0,CH2.t.promptFade); await wait(CH2.t.promptFade*1000); }
+
+  /* freeze — pause first, then read the pose so the rect matches the held frame */
+  try { document.querySelector('a-scene').systems['mindar-image-system'].pause(); }
+  catch(e){ console.warn('pause failed', e); }
+  C2.band = bandScreenRect();
+  c2beat3();
+}
+
+/* =================== 3 — highlight the line =================== */
+async function c2beat3(){
+  A.beat = 23;
+  c2mask(C2.band, 0);
+  $('c2-mask').style.transition = `opacity ${CH2.t.bandFade}s ease`;
+  requestAnimationFrame(()=> $('c2-mask').style.opacity = 1);
+  await wait((CH2.t.bandFade + CH2.t.bandHold)*1000);
+  c2beat4();
+}
+
+/* =================== 4 — tap prompt =================== */
+async function c2beat4(){
+  A.beat = 24;
+  const pr = $('c2-prompt');
+  pr.textContent = CH2.copy.prompt;
+  pr.style.fontSize = S(CFG.type.title)+'px';
+  pr.style.left = S(CFG.px.margin)+'px';
+  pr.style.width = (vw()-2*S(CFG.px.margin))+'px';
+  pr.style.top = 'auto';
+  pr.style.bottom = (0.05*vh())+'px';
+  fadeEl(pr, 1, CH2.t.promptFade);
+
+  /* Tap target padded well beyond the visible band — the band itself is only
+     10-16 CSS px tall, far under the 44pt minimum. */
+  const pad = Math.max(S(30), C2.band.h);
+  const hit = document.createElement('div');
+  Object.assign(hit.style,{position:'fixed', zIndex:15, cursor:'pointer',
+    left:'0px', width:vw()+'px',
+    top:(C2.band.y - pad)+'px', height:(C2.band.h + 2*pad)+'px'});
+  document.body.appendChild(hit);
+  await new Promise(res=> hit.addEventListener('pointerup', function h(){ hit.remove(); res(); }, {once:true}));
+  pr.style.bottom = 'auto';
+  fadeEl(pr, 0, 0);
+  c2beat5();
+}
+
+/* =================== 5 — instant cut to the line image =================== */
+async function c2beat5(){
+  A.beat = 25;
+  /* Deliberate hard cut — the only one in either chapter. */
+  $('c2-mask').style.transition = ''; $('c2-mask').style.opacity = 0;
+  $('c2-bg').style.opacity = 1;
+  $('ar-wrap').style.display = 'none';
+  document.querySelectorAll('.mindar-ui-overlay').forEach(n=>n.style.display='none');
+  frame('c2-linewrap', C2.band, true);
+  await wait(CH2.t.cutHold*1000);
+  c2beat6();
+}
+
+/* =================== 6 — exponential zoom + crossfade =================== */
+async function c2beat6(){
+  A.beat = 26;
+  const W = vw(), H = vh(), L = CH2.line, R = L.red, BL = L.blue;
+  const b = C2.band;
+  const s0 = b.w / L.w;
+  const s1 = W / (R.x1 - R.x0);
+  const sB = W / (BL.x1 - BL.x0);
+  const tB = Math.log(sB/s0) / Math.log(s1/s0);          // when blue fills the width
+  const c0 = { x:(W/2 - b.x)/s0, y:(H/2 - b.y)/s0 };      // image point at screen centre, t=0
+  const c1 = { x:(R.x0+R.x1)/2, y:(R.y0+R.y1)/2 };        // ... and at t=1
+  const dur = CH2.t.zoom*1000, t0 = performance.now();
+
+  await new Promise(res=>{ (function step(){
+    const p = Math.min(1,(performance.now()-t0)/dur);
+    /* exponential in scale = constant perceived rate. Linear would look frozen
+       then panicked, because this is an 18.9x move. */
+    const s = s0 * Math.pow(s1/s0, p);
+    const cx = c0.x + (c1.x-c0.x)*p, cy = c0.y + (c1.y-c0.y)*p;
+    const X = W/2 - cx*s, Y = H/2 - cy*s;
+    frame('c2-linewrap', {x:X, y:Y, w:L.w*s, h:L.h*s});
+    if(p >= tB){
+      const k = (p - tB) / (1 - tB);
+      $('c2-linewrap').style.opacity = 1 - k;
+      frame('c2-zoomwrap', {x:X + R.x0*s, y:Y + R.y0*s,
+                            w:(R.x1-R.x0)*s, h:(R.y1-R.y0)*s}, true);
+      $('c2-zoomwrap').style.opacity = k;
+    }
+    if(p<1) requestAnimationFrame(step); else res();
+  })(); });
+
+  $('c2-linewrap').style.opacity = 0;
+  C2.stage = finalStage();
+  frame('c2-zoomwrap', C2.stage, true);
+  await wait(CH2.t.zoomHold*1000);
+  c2beat7();
+}
+
+/* Where the zoomed image comes to rest for beats 7-10.
+   The script says it fills the screen horizontally. That works on a phone —
+   it lands 26% of screen height. On a landscape tablet the same rule makes it
+   81% of the height, leaving nowhere for the question, the body copy or the
+   buttons. So the height is capped and the width follows. */
+function finalStage(){
+  const W = vw(), H = vh(), R = CH2.line.red;
+  const ar = (R.x1-R.x0)/(R.y1-R.y0);
+  let w = W, h = W/ar;
+  const cap = H * CH2.stageCapFrac;
+  if(h > cap){ h = cap; w = h*ar; }
+  return { x:(W-w)/2, y:H/2 - h/2, w, h };
+}
+
+/* map a region of the zoomed image into screen space */
+function zoomRect(box){
+  const st = C2.stage, Z = CH2.zoomed;
+  const sx = st.w/Z.w, sy = st.h/Z.h;
+  return { x:st.x + box.x0*sx, y:st.y + box.y0*sy,
+           w:(box.x1-box.x0)*sx, h:(box.y1-box.y0)*sy };
+}
+
+/* =================== 7 — the question =================== */
+async function c2beat7(){
+  A.beat = 27;
+  c2veil(true, CH2.t.veilFade);
+  await wait(CH2.t.veilFade*1000);
+  const t = $('c2-title'), m = S(CFG.px.margin);
+  t.textContent = CH2.copy.q7;
+  t.style.fontSize = S(CFG.type.title)+'px';
+  t.style.textAlign = 'center';
+  t.style.left = m+'px'; t.style.width = (vw()-2*m)+'px';
+  /* measure while still transparent, so it fades in already centred rather
+     than jumping into place mid-fade */
+  t.style.top = '0px';
+  t.style.top = (vh()/2 - t.getBoundingClientRect().height/2)+'px';
+  fadeEl(t, 1, CH2.t.titleFade);
+  await wait((CH2.t.titleFade + CH2.t.q7Next)*1000);
+  await c2next();
+  fadeEl(t, 0, CH2.t.veilFade);
+  await wait(CH2.t.veilFade*1000);
+  c2beat8();
+}
+
+/* shared NEXT button — resolves when tapped */
+function c2next(){
+  const n = $('c2-next');
+  styleButton(n, 'NEXT');
+  n.style.opacity = 0; n.style.pointerEvents = 'auto';
+  fadeEl(n, 1, CH2.t.veilFade);
+  return new Promise(res=> n.onclick = () => { n.onclick=null; n.style.pointerEvents='none';
+                                               fadeEl(n,0,CH2.t.veilFade); res(); });
+}
+
+/* =================== 8 / 9 — phonogram, determinative =================== */
+async function c2explain(box, titleText, bodyText, align, withAudio){
+  const r = zoomRect(box);
+  /* Swap full veil for the holed mask in the same frame — both are the same
+     darkness, so it reads as the hole opening rather than a flash. */
+  c2mask(r, 0);
+  $('c2-mask').style.transition = '';
+  $('c2-mask').style.opacity = 1;
+  c2veil(false, 0);
+  await wait(CH2.t.veilFade*1000);
+
+  const t = $('c2-title'), b = $('c2-body'), m = S(CFG.px.margin), W = vw();
+  const colW = Math.min(W*0.75 - m, W - 2*m);
+  t.textContent = titleText; b.textContent = bodyText;
+  t.style.fontSize = S(CFG.type.title)+'px';
+  b.style.fontSize = S(CFG.type.body)+'px';
+  t.style.textAlign = b.style.textAlign = align;
+  if(align === 'right'){
+    const right = Math.min(r.x + r.w, W - m);
+    t.style.left = (right - colW)+'px'; b.style.left = (right - colW)+'px';
+  } else {
+    const left = Math.max(r.x, m);
+    t.style.left = left+'px'; b.style.left = left+'px';
+  }
+  t.style.width = colW+'px'; b.style.width = colW+'px';
+  t.style.top = (r.y + r.h + 0.07*vh())+'px';
+  fadeEl(t, 1, CH2.t.titleFade);
+  await wait((CH2.t.titleFade + CH2.t.bodyGap)*1000);
+  b.style.top = (parseFloat(t.style.top) + t.getBoundingClientRect().height + 0.015*vh())+'px';
+  fadeEl(b, 1, CH2.t.bodyFade);
+  await wait(CH2.t.bodyFade*1000);
+
+  if(withAudio){
+    await wait(CH2.t.audioIn*1000);
+    const a = $('c2-audio'), hgt = S(40);
+    a.style.height = hgt+'px'; a.style.width = (hgt*92/72)+'px';
+    a.style.left = m+'px'; a.style.bottom = m+'px'; a.style.top='auto';
+    a.style.pointerEvents = 'auto';
+    a.onclick = () => { const w=$('c2-wedj'); w.currentTime=0; w.play().catch(e=>console.warn('audio blocked',e)); };
+    fadeEl(a, 1, CH2.t.veilFade);
+    await wait(CH2.t.nextIn*1000);
+  } else {
+    await wait(CH2.t.nextIn*1000);
+  }
+  await c2next();
+  [t,b,$('c2-audio')].forEach(e=> fadeEl(e,0,CH2.t.veilFade));
+  $('c2-audio').style.pointerEvents='none';
+  await wait(CH2.t.veilFade*1000);
+}
+
+async function c2beat8(){ A.beat=28; await c2explain(CH2.zoomed.phonogram,     CH2.copy.t8, CH2.copy.b8, 'right', true ); c2beat9(); }
+async function c2beat9(){ A.beat=29; await c2explain(CH2.zoomed.determinative, CH2.copy.t9, CH2.copy.b9, 'left',  false); c2beat10(); }
+
+/* =================== 10 — the quiz =================== */
+async function c2beat10(){
+  A.beat = 30;
+  const W = vw(), H = vh(), m = S(CFG.px.margin);
+  /* highlight goes, whole screen veils, image slides up */
+  $('c2-mask').style.opacity = 0;
+  c2veil(true, CH2.t.veilFade);
+  const from = C2.stage.y, to = 0.05*H, t0 = performance.now(), dur = CH2.t.slide*1000;
+  await new Promise(res=>{ (function slide(){
+    const p = Math.min(1,(performance.now()-t0)/dur);
+    C2.stage.y = from + (to-from)*p;
+    frame('c2-zoomwrap', C2.stage, true);
+    if(p<1) requestAnimationFrame(slide); else res();
+  })(); });
+  await wait(CH2.t.step*1000);
+
+  const hl = zoomRect(CH2.zoomed.full);
+  c2mask(hl, 0);
+  $('c2-mask').style.opacity = 1;
+  await wait(CH2.t.step*1000);
+
+  const t = $('c2-title'), b = $('c2-body');
+  t.textContent = CH2.copy.t10; b.textContent = CH2.copy.b10;
+  t.style.fontSize = S(CFG.type.title)+'px';
+  b.style.fontSize = S(CFG.type.body)+'px';
+  t.style.textAlign = b.style.textAlign = 'center';
+  t.style.left = m+'px'; t.style.width = (W-2*m)+'px';
+  b.style.left = m+'px'; b.style.width = (W-2*m)+'px';
+  const imgBottom = C2.stage.y + C2.stage.h + W*CH2.borderFrac;
+  t.style.top = (imgBottom + 0.10*H)+'px';
+  fadeEl(t, 1, CH2.t.step);
+  await wait(CH2.t.step*1000);
+  b.style.top = (parseFloat(t.style.top) + t.getBoundingClientRect().height + 0.03*H)+'px';
+  fadeEl(b, 1, CH2.t.step);
+  await wait((CH2.t.step + CH2.t.quizIn)*1000);
+  /* Grid is centred between the bottom of the gold border and the bottom of
+     the screen — per the script, equal gap above and below. On a landscape
+     tablet the body copy reaches lower than the image does, so the greater of
+     the two is used and the grid simply centres in what is left. */
+  const bodyBottom = parseFloat(b.style.top) + b.getBoundingClientRect().height;
+  buildQuiz(hl, Math.max(imgBottom, bodyBottom));
+}
+
+function measureText(txt, px){
+  const c = document.createElement('canvas').getContext('2d');
+  c.font = `300 ${px}px Karla, sans-serif`;
+  return c.measureText(txt).width;
+}
+
+function buildQuiz(hl, contentBottom){
+  const W = vw(), H = vh(), tab = isTablet(), m = S(CFG.px.margin);
+  const bd = S(CFG.px.border), padX = S(14), padY = S(8);
+  const nextW = measureText('NEXT', S(CFG.type.btn)) + 2*padX + 2*bd;
+  const bw = 1.34 * nextW;
+  const bh = (S(CFG.type.btn) + 2*padY + 2*bd) * 1.34;
+  const cols = tab ? 4 : 2, rows = tab ? 1 : 2;
+  const gapX = tab ? (W - 2*m - cols*bw)/(cols-1) : (hl.w - 2*bw);
+  const gridW = tab ? (W - 2*m) : hl.w;
+  const gridX = tab ? m : hl.x;
+  const gapY = S(24);
+  const gridH = rows*bh + (rows-1)*gapY;
+  const top = contentBottom + (H - contentBottom - gridH)/2;
+
+  C2.buttons.forEach(e=>e.remove()); C2.buttons = [];
+  CH2.quiz.forEach((q,i)=>{
+    const cx = i % cols, cy = Math.floor(i/cols);
+    const el = document.createElement('div');
+    el.className = 'c2-btn';
+    /* Shrink each label independently to fit — Jake's call. */
+    const avail = bw - 2*padX - 2*bd;
+    const fs = Math.min(S(CFG.type.btn), S(CFG.type.btn)*avail/measureText(q.label, S(CFG.type.btn)));
+    el.innerHTML = `<span style="font-size:${fs}px">${q.label}</span>`;
+    if(q.sub){
+      const fs2 = Math.min(S(18), S(18)*avail/measureText(q.sub, S(18)));
+      el.innerHTML += `<small style="font-size:${fs2}px">${q.sub}</small>`;
+    }
+    Object.assign(el.style,{
+      left:(gridX + cx*(bw + (tab?gapX:gapX)))+'px',
+      top:(top + cy*(bh+gapY))+'px',
+      width:bw+'px', height:bh+'px', borderWidth:bd+'px', pointerEvents:'auto'});
+    el.addEventListener('pointerup', ()=> answerQuiz(q));
+    $('c2-ui').appendChild(el);
+    C2.buttons.push(el);
+    fadeEl(el, 1, CH2.t.quizIn);
+  });
+}
+
+async function answerQuiz(q){
+  if(C2.busy) return;
+  C2.busy = true;
+  await flashAnswer(!!q.correct);      // same overlay as chapter 1
+  if(q.correct){
+    Audio_.ding();
+    C2.buttons.forEach(e=> e.style.pointerEvents='none');
+    document.dispatchEvent(new CustomEvent('hmane:chapter-complete',{detail:{chapter:2}}));
+    console.log('Chapter 2 complete. Chapter 3 picks up from here.');
+  } else {
+    Audio_.buzz();                     // wrong stays tappable — unlimited attempts
+    C2.busy = false;
+  }
+}
+
 /* =================== desktop testing: ?beat=2..6 =================== */
 const SKIP = new URLSearchParams(location.search).get('beat');
 if(SKIP){
@@ -891,6 +1442,30 @@ if(SKIP){
            if(n===5){ beat5(); }
            if(n===6){ beat5(); beat6(); } }
   }, 500));
+}
+
+/* Chapter 2 on desktop: ?ch2=5 .. ?ch2=10.
+   Beats 1-4 need a live pose, so testing starts at the cut. C2.band is faked
+   to a plausible frozen-frame rect. */
+const SKIP2 = new URLSearchParams(location.search).get('ch2');
+if(SKIP2){
+  window.addEventListener('load', ()=> setTimeout(()=>{
+    $('gate').style.display='none'; $('ar-wrap').style.display='none';
+    ['b6','ui-bg','still-win'].forEach(i=>{const e=$(i); if(e) e.style.display='none';});
+    $('c2-line').src = CH2.paths.line; $('c2-zoom').src = CH2.paths.zoomed;
+    const W=vw(), H=vh();
+    C2.band = { x:W*0.10, y:H*0.46, w:W*0.80, h:W*0.80*189/4000 };
+    const n = +SKIP2;
+    if(n<=5){ c2beat5(); }
+    else if(n===6){ $('c2-bg').style.opacity=1; frame('c2-linewrap',C2.band,true); c2beat6(); }
+    else {
+      $('c2-bg').style.opacity=1;
+      const s1=W/(CH2.line.red.x1-CH2.line.red.x0);
+      C2.stage={x:0,y:H/2-(CH2.line.red.y1-CH2.line.red.y0)*s1/2,w:W,h:(CH2.line.red.y1-CH2.line.red.y0)*s1};
+      frame('c2-zoomwrap',C2.stage,true);
+      if(n===7) c2beat7(); else if(n===8) c2beat8(); else if(n===9) c2beat9(); else c2beat10();
+    }
+  }, 600));
 }
 </script>
 </body>
