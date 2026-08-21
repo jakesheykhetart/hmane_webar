@@ -88,6 +88,14 @@
   #c2-title{color:var(--gold);text-transform:uppercase;line-height:1.15;}
   #c2-body{color:var(--grey);line-height:1.45;}
   #c2-prompt{color:var(--gold);text-transform:uppercase;text-align:center;line-height:1.2;}
+  /* Re-acquisition prompt. Deliberately NOT blurred or darkened like the
+     "move closer" overlay — the visitor has to see the camera feed to aim it.
+     A translucent navy pill keeps the type readable against any wall. */
+  #c2-acquire{position:fixed;z-index:15;left:0;right:0;text-align:center;
+              color:var(--gold);text-transform:uppercase;line-height:1.25;
+              opacity:0;pointer-events:none;}
+  #c2-acquire span{display:inline-block;background:rgba(0,0,102,.72);
+                   border-radius:999px;}
   #c2-audio{cursor:pointer;}
   .c2-btn{position:absolute;background:var(--navy);border-style:solid;border-color:var(--gold);
           display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -179,6 +187,7 @@
   <img id="c2-audio" src="./assets/images/audio-icon.png" alt="Play sound">
   <div id="c2-next" class="btn">Next</div>
 </div>
+<div id="c2-acquire"><span></span></div>
 <audio id="c2-wedj" src="./assets/audio/wedj.m4a" preload="auto"></audio>
 
 <div id="viewer"><img id="viewer-img" alt=""><img id="viewer-close" src="./assets/images/zoom-icon.png" alt="Close"></div>
@@ -983,7 +992,8 @@ const CH2 = {
     b9       : 'This is a determinative sign—a symbol that is not pronounced but clarifies the meaning of the word that comes before it.',
     t10      : 'What do these hieroglyphs mean?',
     b10      : 'Tap the buttons to guess',
-    moveClose: 'Move phone closer'
+    moveClose: 'Move phone closer',
+    acquire  : 'Point your device at the Rosetta Stone'
   },
 
   quiz: [ {label:'STELA', sub:'(CARVED SLAB)', correct:true},
@@ -1044,6 +1054,8 @@ const fadeEl = (el, to, secs) => { el.style.transition = `opacity ${secs}s ease`
 
 /* =================== chapter 2 entry =================== */
 async function startChapter2(){
+  A.beat = 21;
+
   /* tear down chapter 1 */
   ['b6','ui','ui-bg','still-win','mask','band-label','viewer'].forEach(i=>{
     const e=$(i); if(e){ e.style.opacity=0; e.style.pointerEvents='none'; } });
@@ -1053,21 +1065,54 @@ async function startChapter2(){
   $('c2-line').src = CH2.paths.line;
   $('c2-zoom').src = CH2.paths.zoomed;
 
-  /* resume tracking */
-  $('ar-wrap').style.display = '';
-  document.querySelectorAll('.mindar-ui-overlay').forEach(n=>n.style.display='');
-  setModelOpacity(0);
-  try { document.querySelector('a-scene').systems['mindar-image-system'].unpause(); }
-  catch(e){ console.error('unpause failed', e); }
+  /* Reset the black-out layer. Chapter 1 beat 2 ramps #ar-dim to full black to
+     retire the live camera behind the double exposure; without clearing it the
+     resumed AR renders underneath an opaque div and the screen just looks dead. */
+  const dim = $('ar-dim');
+  dim.style.transition = ''; dim.style.opacity = 0;
 
-  A.beat = 21;
+  /* restore the AR layer, then let it lay out before unpausing */
+  $('ar-wrap').style.display = '';
+  document.querySelectorAll('.mindar-ui-overlay').forEach(n=>n.style.display='none');
+  setModelOpacity(0);
+
+  /* Force a genuine re-acquisition. pause() leaves the anchor's visible flag
+     set from chapter 1, so MindAR would never emit targetFound again and the
+     chapter would open against a camera that isn't tracking anything. */
+  const target = $('stone-target');
+  target.object3D.visible = false;
+
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+  try {
+    const sys = document.querySelector('a-scene').systems['mindar-image-system'];
+    sys.unpause();
+    if(sys._resize) sys._resize();     // container was display:none; re-fit the video
+  } catch(e){ console.error('unpause failed', e); }
+
+  /* Prompt, unless the target is found straight away — no point flashing it at
+     a visitor who never lowered the phone. */
+  let found = false;
+  const promptTimer = setTimeout(()=>{ if(!found) showAcquire(); }, 400);
   await new Promise(res=>{
-    const t = $('stone-target');
-    const onFound = () => { t.removeEventListener('targetFound', onFound); res(); };
-    if(t.object3D.visible) res(); else t.addEventListener('targetFound', onFound);
+    const onFound = () => { target.removeEventListener('targetFound', onFound); res(); };
+    target.addEventListener('targetFound', onFound);
   });
+  found = true;
+  clearTimeout(promptTimer);
+  hideAcquire();
   c2beat1();
 }
+
+function showAcquire(){
+  const el = $('c2-acquire'), sp = el.firstElementChild;
+  sp.textContent = CH2.copy.acquire;
+  sp.style.fontSize = S(CFG.type.title)+'px';
+  sp.style.padding = `${S(14)}px ${S(22)}px`;
+  sp.style.maxWidth = (vw() - 2*S(CFG.px.margin))+'px';
+  el.style.bottom = (0.12*vh())+'px';
+  fadeEl(el, 1, CH2.t.promptFade);
+}
+function hideAcquire(){ fadeEl($('c2-acquire'), 0, CH2.t.promptFade); }
 
 /* =================== 1 — target found =================== */
 async function c2beat1(){
