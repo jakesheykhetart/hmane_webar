@@ -103,6 +103,11 @@
               color:var(--gold);text-transform:uppercase;text-align:center;
               line-height:1.25;opacity:0;pointer-events:none;}
   #c2-audio{cursor:pointer;}
+  #c2-audiolabel{color:var(--gold);text-transform:uppercase;line-height:1.15;cursor:pointer;}
+  #c2-silent{color:var(--grey);line-height:1.3;}
+  /* Navy on the image's light plate — see hintAnchor. */
+  #c2-hint{color:var(--navy);text-align:center;cursor:pointer;pointer-events:auto;
+           text-decoration:underline;}
   .c2-btn{position:absolute;background:var(--navy);border-style:solid;border-color:var(--gold);
           display:flex;flex-direction:column;align-items:center;justify-content:center;
           color:var(--gold);text-transform:uppercase;cursor:pointer;opacity:0;line-height:1.1;}
@@ -192,6 +197,9 @@
   <div id="c2-title"></div>
   <div id="c2-body"></div>
   <img id="c2-audio" src="./assets/images/audio-icon.png" alt="Play sound">
+  <div id="c2-audiolabel"></div>
+  <div id="c2-silent"></div>
+  <div id="c2-hint"></div>
   <div id="c2-next" class="btn">Next</div>
 </div>
 <div id="c2-acquire"></div>
@@ -957,6 +965,17 @@ const CH2 = {
   detInterior : { x0:157, y0:101, x1:307, y1:381 },
   /* The stele's own bounding box inside the phone still's coordinate space. */
   stelaInPhone: { x0:269, y0:127, x1:1187, y1:1983 },
+  detOverscan : 1.06,
+  /* Where "HINT?" sits, in zoomed image space — centred under the glyph, on the
+     light plate below it. Navy on light grey; navy on the navy field would be
+     invisible, which is why it lives inside the image rather than under it.
+     y is the CENTRE of the text band, not its top: the gap between the glyph's
+     bottom (detInterior.y1 = 381) and the bottom of the un-darkened hole
+     (zoomed.full.y1 = 473) is only ~33px on an iPhone SE, so anchoring the top
+     left barely 1px under the underline stroke. Centring splits the slack
+     evenly and holds up from SE through iPad Pro. w is the tap target's width,
+     kept inside the glyph's own column so it never reaches the phonograms. */
+  hintAnchor  : { cx:231, y:427, w:250 },
 
   /* Band to highlight, in the TRACKING TARGET's space (source-01.jpg,
      2342 x 3288) — NOT the phone still. Anything anchored to live or frozen
@@ -1004,9 +1023,11 @@ const CH2 = {
   t: { fadeIn:1.5, hold:2.0, settle:0.5, timeout:3.0,
        bandFade:0.5, bandHold:1.0, promptFade:0.5,
        cutHold:1.0, zoom:2.5, zoomHold:1.0,
-       detFade:0.25, detHold:0.75,
+       detFade:0.25, detHold:1.25,
        veilFade:0.25, titleFade:0.5, bodyGap:0.25, bodyFade:0.5,
-       q7Next:0.75, audioIn:1.0, nextIn:1.0, slide:1.0, step:0.25, quizIn:0.5 },
+       q7Next:0.75, audioIn:1.0, nextIn:1.0, slide:1.0, step:0.25, quizIn:0.5,
+       hintDelay:2.0, silentHold:4.0 },
+  hintPt: 12,
 
   /* Gold frame thickness — 1.5% of screen width, CONSTANT.
      The script says it "scales with the zoom", but at 18.9x that would end as
@@ -1035,7 +1056,16 @@ const CH2 = {
     t10      : 'What do these hieroglyphs mean?',
     b10      : 'Tap the buttons to guess',
     moveClose: 'Move phone closer',
-    acquire  : 'Point your device at the Rosetta Stone'
+    acquire  : 'Point your device at the Rosetta Stone',
+    /* Names the signs, not just "sounds". "Hear these sounds" left it ambiguous —
+       which sounds, and whose? "These phonograms" points at the cluster
+       highlighted directly above the button, so the audio reads as those signs
+       vocalised rather than ambience or narration. Kept to three words because
+       fitOneLine has no floor: "hear these phonograms read aloud" shrank to
+       ~10px on an iPhone SE, below the 12pt hint. */
+    audioLabel: 'Hear these phonograms',
+    silent   : 'No sound? Check the silent switch on the side of your phone.',
+    hint     : 'Hint?'
   },
 
   quiz: [ {label:'STELA', sub:'(CARVED SLAB)', correct:true},
@@ -1301,8 +1331,16 @@ async function c2beat6(){
   const s1 = W / (R.x1 - R.x0);
   const sB = W / (BL.x1 - BL.x0);
   const tB = Math.log(sB/s0) / Math.log(s1/s0);          // when blue fills the width
-  const c0 = { x:(W/2 - b.x)/s0, y:(H/2 - b.y)/s0 };      // image point at screen centre, t=0
-  const c1 = { x:(R.x0+R.x1)/2, y:(R.y0+R.y1)/2 };        // ... and at t=1
+
+  /* Track the RED BOX's position on screen rather than whichever image point
+     happens to sit at screen centre. The old version derived its focal point
+     from the screen centre at t=0, so when the frozen stone sat off to one side
+     that point could fall outside the line image entirely and the whole thing
+     would swing off-screen mid-zoom. Interpolating the red box from where it
+     starts to the centre of the screen is monotonic by construction — it can
+     only ever travel inward. */
+  const rcx = (R.x0+R.x1)/2, rcy = (R.y0+R.y1)/2;
+  const startX = b.x + rcx*s0, startY = b.y + rcy*s0;
   const dur = CH2.t.zoom*1000, t0 = performance.now();
 
   await new Promise(res=>{ (function step(){
@@ -1310,8 +1348,26 @@ async function c2beat6(){
     /* exponential in scale = constant perceived rate. Linear would look frozen
        then panicked, because this is an 18.9x move. */
     const s = s0 * Math.pow(s1/s0, p);
-    const cx = c0.x + (c1.x-c0.x)*p, cy = c0.y + (c1.y-c0.y)*p;
-    const X = W/2 - cx*s, Y = H/2 - cy*s;
+    const scx = startX + (W/2 - startX)*p;
+    const scy = startY + (H/2 - startY)*p;
+    let X = scx - rcx*s;
+    const Y = scy - rcy*s;
+    /* Keep the line on screen horizontally, in both phases.
+       Once the image is wider than the screen, clamp so it fills it — the red
+       box sits 227px from the end of a 4000px image, so otherwise a sliver of
+       navy shows at the right edge. But the drift starts earlier than that:
+       for the first fraction of a second the scale has barely grown while the
+       pan is already tracking toward the red box, so the image slides left and
+       uncovers the right edge. While it is still narrower than the screen,
+       hold it fully on screen instead.
+       Eased in over the first 12% so it never jumps out of beat 5's placement,
+       which is registered to the highlighted band and must not move.
+       No vertical equivalent — following the blue box is correct, and the image
+       is meant to sit in a navy field with the gold border above and below. */
+    const iw = L.w*s;
+    const safe = iw >= W ? Math.min(0, Math.max(W - iw, X))
+                         : Math.min(Math.max(X, 0), Math.max(0, W - iw));
+    X += (safe - X) * Math.min(1, p/0.12);
     frame('c2-linewrap', {x:X, y:Y, w:L.w*s, h:L.h*s});
     if(p >= tB){
       const k = (p - tB) / (1 - tB);
@@ -1446,7 +1502,26 @@ function wedjLoad(){
     .catch(e => { console.error('wedj decode failed:', e); Wedj.loading = null; });
   return Wedj.loading;
 }
+/* Web Audio should reach the speaker with the ringer switch off, but that has
+   not been uniformly true across iOS versions and there is no API to query the
+   switch. So say it once, quietly, the first time they ask for sound. */
+let silentShown = false;
+function noteSilentSwitch(){
+  if(silentShown) return;
+  silentShown = true;
+  const el = $('c2-silent'), m = S(CFG.px.margin), a = $('c2-audio');
+  const above = parseFloat(a.style.height || 0) + m + S(10);
+  el.textContent = CH2.copy.silent;
+  el.style.fontSize = S(13)+'px';
+  el.style.left = m+'px';
+  el.style.width = (vw() - 2*m)+'px';
+  el.style.bottom = above+'px'; el.style.top='auto';
+  fadeEl(el, 1, CH2.t.veilFade);
+  setTimeout(()=> fadeEl(el, 0, CH2.t.veilFade), CH2.t.silentHold*1000);
+}
+
 function playWedj(){
+  noteSilentSwitch();
   const ctx = Audio_.ctx;
   const fallback = () => {
     const w = $('c2-wedj');
@@ -1522,12 +1597,22 @@ async function c2explain(box, titleText, bodyText, align, withAudio, keepAfter){
 
   if(withAudio){
     await wait(CH2.t.audioIn*1000);
-    const a = $('c2-audio'), hgt = S(40);
+    const a = $('c2-audio'), lab = $('c2-audiolabel'), hgt = S(40);
     a.style.height = hgt+'px'; a.style.width = (hgt*92/72)+'px';
     a.style.left = m+'px'; a.style.bottom = m+'px'; a.style.top='auto';
     a.style.pointerEvents = 'auto';
-    a.onclick = playWedj;
-    fadeEl(a, 1, CH2.t.veilFade);
+    /* A bare speaker icon doesn't say what the sound IS. Labelling it ties the
+       audio to the signs highlighted directly above it. */
+    const iconW = hgt*92/72, labX = m + iconW + S(10);
+    lab.style.left = labX+'px';
+    lab.style.width = (vw() - labX - m - S(CFG.type.btn)*3.2)+'px';
+    lab.style.bottom = m+'px'; lab.style.top='auto';
+    lab.style.fontSize = S(CFG.type.body)+'px';
+    lab.textContent = CH2.copy.audioLabel;
+    fitOneLine(lab, parseFloat(lab.style.width), CFG.type.body);
+    lab.style.pointerEvents = 'auto';
+    a.onclick = lab.onclick = playWedj;
+    fadeEl(a, 1, CH2.t.veilFade); fadeEl(lab, 1, CH2.t.veilFade);
     await wait(CH2.t.nextIn*1000);
   } else {
     await wait(CH2.t.nextIn*1000);
@@ -1536,8 +1621,9 @@ async function c2explain(box, titleText, bodyText, align, withAudio, keepAfter){
   $('c2-audio').style.pointerEvents='none';
   /* Beat 9 hands straight to 9.5 with the title, copy and button still on
      screen — the reveal happens under the explanation that set it up. */
-  if(keepAfter){ fadeEl($('c2-audio'),0,CH2.t.veilFade); return c2beat95(); }
-  [t,b,$('c2-audio')].forEach(e=> fadeEl(e,0,CH2.t.veilFade));
+  [$('c2-audiolabel'),$('c2-silent')].forEach(e=>{ e.style.pointerEvents='none'; });
+  if(keepAfter){ [$('c2-audio'),$('c2-audiolabel'),$('c2-silent')].forEach(e=>fadeEl(e,0,CH2.t.veilFade)); return c2beat95(); }
+  [t,b,$('c2-audio'),$('c2-audiolabel'),$('c2-silent')].forEach(e=> fadeEl(e,0,CH2.t.veilFade));
   await wait(CH2.t.veilFade*1000);
 }
 
@@ -1552,8 +1638,10 @@ async function c2beat9(){ A.beat=29; await c2explain(CH2.zoomed.determinative, C
    Rosetta Stone itself makes that legible without saying it, and gives the quiz
    the hint it was missing. The mask is derived from the glyph's own outline in
    stela-zoomed.jpg, so it registers exactly. */
-async function c2beat95(){
-  A.beat = 30;
+/* Position the masked stone inside the determinative's outline for whatever
+   size and place the stage is currently at. Used by beat 9.5 and by the quiz
+   hint, which fire at different stage sizes. */
+function placeDetFill(){
   const Z = CH2.zoomed, st = C2.stage, I = CH2.detInterior, P = CH2.stelaInPhone;
   const fill = $('c2-detfill'), im = $('c2-detimg');
   im.src = CFG.paths.stillPhone;
@@ -1564,16 +1652,22 @@ async function c2beat95(){
   fill.style.left = st.x+'px'; fill.style.top = st.y+'px';
   fill.style.width = st.w+'px'; fill.style.height = st.h+'px';
 
-  /* Scale the still so the stele's own outline fits the arch opening, then
-     offset so the two shapes sit concentric. */
+  /* COVER, not contain. Fitting the stele inside the opening left the still's
+     wall background showing in the corners of the arch; filling it and letting
+     a little of the stone crop reads as one object instead of a photo pasted
+     into a shape. The overscan guarantees no wall peeks at the edges. */
   const sx = st.w/Z.w, sy = st.h/Z.h;
   const openW = (I.x1-I.x0)*sx, openH = (I.y1-I.y0)*sy;
-  const s = Math.min(openW/(P.x1-P.x0), openH/(P.y1-P.y0));
-  const iw = CFG.phone.w*s, ih = CFG.phone.h*s;
-  im.style.width = iw+'px'; im.style.height = ih+'px';
+  const s = Math.max(openW/(P.x1-P.x0), openH/(P.y1-P.y0)) * CH2.detOverscan;
+  im.style.width = (CFG.phone.w*s)+'px'; im.style.height = (CFG.phone.h*s)+'px';
   im.style.left = (I.x0*sx + (openW - (P.x1-P.x0)*s)/2 - P.x0*s)+'px';
   im.style.top  = (I.y0*sy + (openH - (P.y1-P.y0)*s)/2 - P.y0*s)+'px';
+  return fill;
+}
 
+async function c2beat95(){
+  A.beat = 30;
+  const fill = placeDetFill();
   fadeEl(fill, 1, CH2.t.detFade);
   await wait((CH2.t.detFade + CH2.t.detHold)*1000);
   [fill, $('c2-title'), $('c2-body')].forEach(e=> fadeEl(e, 0, CH2.t.veilFade));
@@ -1676,11 +1770,44 @@ function buildQuiz(hl, contentBottom){
     C2.buttons.push(el);
     fadeEl(el, 1, CH2.t.quizIn);
   });
+  /* Offer the hint after a beat of hesitation. */
+  clearTimeout(C2.hintTimer);
+  C2.hintTimer = setTimeout(showHint, CH2.t.hintDelay*1000);
+}
+
+/* ---- the hint ----
+   Offered after a couple of seconds of hesitation, or straight away after a
+   wrong answer. Tapping it replays the beat 9.5 reveal in place and leaves it
+   up until the next guess, so the hint IS the teaching rather than a text tip. */
+function showHint(){
+  if(C2.hintOpen) return;
+  const el = $('c2-hint'), st = C2.stage, Z = CH2.zoomed, an = CH2.hintAnchor;
+  const sx = st.w/Z.w, sy = st.h/Z.h;
+  el.textContent = CH2.copy.hint;
+  el.style.fontSize = S(CH2.hintPt)+'px';
+  const bw = an.w*sx, lh = S(CH2.hintPt)*1.25;
+  el.style.width = bw+'px';
+  el.style.left = (st.x + an.cx*sx - bw/2)+'px';
+  el.style.top = (st.y + an.y*sy - lh/2)+'px';
+  el.style.pointerEvents = 'auto';
+  el.onclick = () => {
+    C2.hintOpen = true;
+    fadeEl(el, 0, CH2.t.veilFade); el.style.pointerEvents = 'none';
+    fadeEl(placeDetFill(), 1, CH2.t.detFade);
+  };
+  fadeEl(el, 1, CH2.t.veilFade);
+}
+function hideHint(){
+  const el = $('c2-hint');
+  clearTimeout(C2.hintTimer);
+  fadeEl(el, 0, CH2.t.veilFade); el.style.pointerEvents = 'none';
+  if(C2.hintOpen){ fadeEl($('c2-detfill'), 0, CH2.t.veilFade); C2.hintOpen = false; }
 }
 
 async function answerQuiz(q){
   if(C2.busy) return;
   C2.busy = true;
+  hideHint();                          // clear any open reveal before the verdict
   await flashAnswer(!!q.correct);      // same overlay as chapter 1
   if(q.correct){
     Audio_.ding();
@@ -1690,6 +1817,7 @@ async function answerQuiz(q){
   } else {
     Audio_.buzz();                     // wrong stays tappable — unlimited attempts
     C2.busy = false;
+    showHint();                        // a wrong guess earns the hint immediately
   }
 }
 
