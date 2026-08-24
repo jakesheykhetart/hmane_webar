@@ -965,7 +965,18 @@ const CH2 = {
   detInterior : { x0:157, y0:101, x1:307, y1:381 },
   /* The stele's own bounding box inside the phone still's coordinate space. */
   stelaInPhone: { x0:269, y0:127, x1:1187, y1:1983 },
-  detOverscan : 1.06,
+  /* Overscan on the stone inside the glyph. 1.06 was derived from the stele's
+     BOUNDING BOX and was wrong: rosetta-phone.jpg carries a soft shadowed halo
+     24-55px wide (in 1400x2100 space) around the stone, lighter than the stone
+     and darker than open wall. At 1.06 the worst point of the glyph outline sat
+     only 15px inside the silhouette — i.e. inside that halo — so a pale sliver
+     traced the arch's left and top edge on device (260824).
+     1.20 puts the whole outline at least 67px inside, clear of the halo, at a
+     cost of 8.3% cropped off each side and 10.8% off top and bottom. Measured,
+     not guessed: distance transform of the segmented stone silhouette sampled
+     at every pixel of the mask. If the still is ever re-exported, re-measure —
+     the number depends on that halo, not on the shapes. */
+  detOverscan : 1.20,
   /* Where "HINT?" sits, in zoomed image space — centred under the glyph, on the
      light plate below it. Navy on light grey; navy on the navy field would be
      invisible, which is why it lives inside the image rather than under it.
