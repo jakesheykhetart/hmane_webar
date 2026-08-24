@@ -78,6 +78,13 @@
   #c2-stage{position:fixed;inset:0;z-index:12;pointer-events:none;overflow:hidden;}
   .c2-frame{position:absolute;border-style:solid;border-color:var(--gold);overflow:hidden;opacity:0;}
   .c2-frame img{position:absolute;left:0;top:0;width:100%;height:100%;display:block;}
+  /* Beat 9.5 — the stone revealed inside the determinative's outline.
+     Clipped with an alpha mask derived from the glyph itself. */
+  #c2-detfill{position:absolute;overflow:hidden;opacity:0;pointer-events:none;
+              -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+              -webkit-mask-size:100% 100%;mask-size:100% 100%;
+              -webkit-mask-position:0 0;mask-position:0 0;}
+  #c2-detfill img{position:absolute;display:block;}
   #c2-mask{position:fixed;inset:0;z-index:13;pointer-events:none;opacity:0;}
   #c2-mask div{position:absolute;background:rgba(0,0,0,.55);
                backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
@@ -176,6 +183,7 @@
 <div id="c2-stage">
   <div id="c2-linewrap" class="c2-frame"><img id="c2-line" alt=""></div>
   <div id="c2-zoomwrap" class="c2-frame"><img id="c2-zoom" alt=""></div>
+  <div id="c2-detfill"><img id="c2-detimg" alt=""></div>
 </div>
 <div id="c2-mask"><div></div><div></div><div></div><div></div></div>
 <div id="c2-veil"></div>
@@ -187,7 +195,8 @@
   <div id="c2-next" class="btn">Next</div>
 </div>
 <div id="c2-acquire"></div>
-<audio id="c2-wedj" src="./assets/audio/wedj.m4a" preload="auto"></audio>
+<!-- Fallback only. Primary playback is Web Audio — see playWedj(). -->
+<audio id="c2-wedj" src="./assets/audio/HMANE_WEDJ_SOUND.m4a" preload="auto" playsinline></audio>
 
 <div id="viewer"><img id="viewer-img" alt=""><img id="viewer-close" src="./assets/images/zoom-icon.png" alt="Close"></div>
 
@@ -937,8 +946,17 @@ const CH2 = {
   paths: {
     line      : './assets/images/hieroglyphic-line.jpg',
     zoomed    : './assets/images/stela-zoomed.jpg',
-    audioIcon : './assets/images/audio-icon.png'
+    audioIcon : './assets/images/audio-icon.png',
+    detMask   : './assets/images/det-mask.png',
+    wedj      : './assets/audio/HMANE_WEDJ_SOUND.m4a'
   },
+
+  /* Interior of the determinative's outline, in zoomed image space. Derived by
+     flood-filling the glyph in stela-zoomed.jpg — the outline is closed, so the
+     fill is exact and registers with the artwork automatically. */
+  detInterior : { x0:157, y0:101, x1:307, y1:381 },
+  /* The stele's own bounding box inside the phone still's coordinate space. */
+  stelaInPhone: { x0:269, y0:127, x1:1187, y1:1983 },
 
   /* Band to highlight, in the TRACKING TARGET's space (source-01.jpg,
      2342 x 3288) — NOT the phone still. Anything anchored to live or frozen
@@ -976,14 +994,17 @@ const CH2 = {
   closeFrac: { phone:0.75, tablet:0.85 },
 
   /* How long to wait for the visitor to raise the phone before giving up on AR
-     and running the still fallback. 3s is brisk — someone mid-lift could just
-     miss it. One number to change if it proves too tight in the gallery. */
-  acquireTimeout: 3.0,
+     and running the still fallback. 3s was far too brisk — reading the prompt,
+     raising the phone, aiming it and letting MindAR lock on is comfortably more
+     than that, so anyone genuinely trying was being dropped into the fallback
+     mid-lift. 10s is long enough to succeed and short enough not to feel stuck. */
+  acquireTimeout: 10.0,
   fallbackHold: 1.0,
 
   t: { fadeIn:1.5, hold:2.0, settle:0.5, timeout:3.0,
        bandFade:0.5, bandHold:1.0, promptFade:0.5,
        cutHold:1.0, zoom:2.5, zoomHold:1.0,
+       detFade:0.25, detHold:0.75,
        veilFade:0.25, titleFade:0.5, bodyGap:0.25, bodyFade:0.5,
        q7Next:0.75, audioIn:1.0, nextIn:1.0, slide:1.0, step:0.25, quizIn:0.5 },
 
@@ -1000,7 +1021,7 @@ const CH2 = {
 
   /* Target centreline for the zoomed image during beats 8 and 9, as a fraction
      of screen height. Treated as a target rather than a fixed value — see
-     explainStageY(). */
+     explainStage(). */
   stageCentreFrac: 0.375,
   stageMinTopFrac: 0.03,
 
@@ -1323,12 +1344,29 @@ function finalStage(){
      drops from ~844pt to ~525pt and the body copy would otherwise run straight
      through the NEXT button. Sizing the image here rather than shrinking it
      later keeps it from jumping between beat 6 and beat 8. */
-  const capFixed = H * CH2.stageCapFrac;
-  const bf = CH2.zoomed.phonogram.y1 / CH2.zoomed.h;
-  const capFit = (H - buttonZone() - explainCopyHeight() - CH2.stageMinTopFrac*H) / bf;
-  const cap = Math.min(capFixed, capFit);
-  if(h > cap){ h = Math.max(cap, H*0.18); w = h*ar; }
+  const cap = H * CH2.stageCapFrac;
+  if(h > cap){ h = cap; w = h*ar; }
   return { x:(W-w)/2, y:H/2 - h/2, w, h };
+}
+
+/* Beats 8 and 9 need a smaller image than beats 6, 7 and 10 do, because they
+   carry a title and a paragraph underneath. The resize happens during beat 7,
+   while the screen is fully veiled, and is undone during beat 10's slide, which
+   is also veiled — so the change is never visible. */
+function explainStage(){
+  if(C2.explainStage) return C2.explainStage;
+  const W = vw(), H = vh(), R = CH2.line.red;
+  const ar = (R.x1-R.x0)/(R.y1-R.y0);
+  let w = W, h = W/ar;
+  const bf = CH2.zoomed.phonogram.y1 / CH2.zoomed.h;
+  const cap = Math.min(H*CH2.stageCapFrac,
+                       (H - buttonZone() - explainCopyHeight() - CH2.stageMinTopFrac*H) / bf);
+  if(h > cap){ h = Math.max(cap, H*0.18); w = h*ar; }
+  let y = CH2.stageCentreFrac*H - h/2;
+  const overflow = (y + bf*h + explainCopyHeight()) - (H - buttonZone());
+  if(overflow > 0) y -= overflow;
+  C2.explainStage = { x:(W-w)/2, y:Math.max(CH2.stageMinTopFrac*H, y), w, h };
+  return C2.explainStage;
 }
 
 /* map a region of the zoomed image into screen space */
@@ -1344,6 +1382,9 @@ async function c2beat7(){
   A.beat = 27;
   c2veil(true, CH2.t.veilFade);
   await wait(CH2.t.veilFade*1000);
+  /* Shrink to the beats 8-9 size now, while the veil hides it. */
+  C2.stage = Object.assign({}, explainStage());
+  frame('c2-zoomwrap', C2.stage, true);
   const t = $('c2-title'), m = S(CFG.px.margin);
   t.textContent = CH2.copy.q7;
   t.style.fontSize = S(CFG.type.title)+'px';
@@ -1367,8 +1408,11 @@ function c2next(){
   styleButton(n, 'NEXT');
   n.style.opacity = 0; n.style.pointerEvents = 'auto';
   fadeEl(n, 1, CH2.t.veilFade);
-  return new Promise(res=> n.onclick = () => { n.onclick=null; n.style.pointerEvents='none';
-                                               fadeEl(n,0,CH2.t.veilFade); res(); });
+  return new Promise(res=> n.onclick = () => {
+    n.onclick = null; n.style.pointerEvents = 'none';
+    fadeEl(n, 0, CH2.t.veilFade);
+    res();
+  });
 }
 
 /* =================== 8 / 9 — phonogram, determinative =================== */
@@ -1384,6 +1428,43 @@ function buttonZone(){
    So 37.5% is a target, not a promise — the image moves further up if the copy
    below it needs the room. Computed once from the longer of the two bodies so
    the image does not jump between beat 8 and beat 9. */
+/* ---- Wedj playback ----
+   Played through Web Audio rather than the <audio> element on purpose. An
+   HTML5 <audio> tag obeys the iOS ringer switch, so on a phone set to silent —
+   which is most phones in a gallery — it plays nothing at all and gives no
+   error. Web Audio goes through the speaker regardless. The <audio> element is
+   kept as a fallback for anything that can't decode. */
+const Wedj = { buf:null, loading:null };
+function wedjLoad(){
+  if(Wedj.buf || Wedj.loading) return Wedj.loading;
+  const ctx = Audio_.ctx;
+  if(!ctx) return null;
+  Wedj.loading = fetch(CH2.paths.wedj)
+    .then(r => { if(!r.ok) throw new Error(`${r.status} on ${CH2.paths.wedj}`); return r.arrayBuffer(); })
+    .then(ab => new Promise((res,rej)=> ctx.decodeAudioData(ab, res, rej)))
+    .then(b => { Wedj.buf = b; return b; })
+    .catch(e => { console.error('wedj decode failed:', e); Wedj.loading = null; });
+  return Wedj.loading;
+}
+function playWedj(){
+  const ctx = Audio_.ctx;
+  const fallback = () => {
+    const w = $('c2-wedj');
+    try { w.pause(); w.currentTime = 0; } catch(e){}
+    const p = w.play();
+    if(p && p.catch) p.catch(err => console.error('wedj fallback failed:', err,
+      '— check assets/audio/HMANE_WEDJ_SOUND.m4a exists, and the ringer switch'));
+  };
+  if(!ctx) return fallback();
+  if(ctx.state === 'suspended') ctx.resume();
+  const start = () => {
+    if(!Wedj.buf) return fallback();
+    const src = ctx.createBufferSource();
+    src.buffer = Wedj.buf; src.connect(ctx.destination); src.start(0);
+  };
+  if(Wedj.buf) start(); else { const p = wedjLoad(); p ? p.then(start) : fallback(); }
+}
+
 /* Vertical space the copy needs below the highlight, taking the longer of the
    two bodies so beats 8 and 9 share one image position and nothing jumps. */
 function explainCopyHeight(){
@@ -1408,20 +1489,7 @@ function explainCopyHeight(){
   return worst;
 }
 
-function explainStageY(){
-  if(C2.explainY != null) return C2.explainY;
-  const H = vh(), st = C2.stage;
-  const bf = CH2.zoomed.phonogram.y1 / CH2.zoomed.h;
-  let y = CH2.stageCentreFrac*H - st.h/2;
-  const overflow = (y + bf*st.h + explainCopyHeight()) - (H - buttonZone());
-  if(overflow > 0) y -= overflow;
-  C2.explainY = Math.max(CH2.stageMinTopFrac*H, y);
-  return C2.explainY;
-}
-
-async function c2explain(box, titleText, bodyText, align, withAudio){
-  C2.stage.y = explainStageY();
-  frame('c2-zoomwrap', C2.stage, true);
+async function c2explain(box, titleText, bodyText, align, withAudio, keepAfter){
   const r = zoomRect(box);
   /* Swap full veil for the holed mask in the same frame — both are the same
      darkness, so it reads as the hole opening rather than a flash. */
@@ -1458,31 +1526,60 @@ async function c2explain(box, titleText, bodyText, align, withAudio){
     a.style.height = hgt+'px'; a.style.width = (hgt*92/72)+'px';
     a.style.left = m+'px'; a.style.bottom = m+'px'; a.style.top='auto';
     a.style.pointerEvents = 'auto';
-    a.onclick = () => {
-      const w = $('c2-wedj');
-      try { w.pause(); w.currentTime = 0; } catch(e){}
-      const p = w.play();
-      if(p && p.catch) p.catch(err => {
-        /* A 404 on the m4a and a blocked autoplay look identical from here, so
-           say which. The file living only in the delivery folder and never
-           being committed is the likelier of the two. */
-        console.error('wedj.m4a did not play:', err,
-          '— check assets/audio/wedj.m4a exists in the repo, and that the tap reached this handler');
-      });
-    };
+    a.onclick = playWedj;
     fadeEl(a, 1, CH2.t.veilFade);
     await wait(CH2.t.nextIn*1000);
   } else {
     await wait(CH2.t.nextIn*1000);
   }
   await c2next();
-  [t,b,$('c2-audio')].forEach(e=> fadeEl(e,0,CH2.t.veilFade));
   $('c2-audio').style.pointerEvents='none';
+  /* Beat 9 hands straight to 9.5 with the title, copy and button still on
+     screen — the reveal happens under the explanation that set it up. */
+  if(keepAfter){ fadeEl($('c2-audio'),0,CH2.t.veilFade); return c2beat95(); }
+  [t,b,$('c2-audio')].forEach(e=> fadeEl(e,0,CH2.t.veilFade));
   await wait(CH2.t.veilFade*1000);
 }
 
 async function c2beat8(){ A.beat=28; await c2explain(CH2.zoomed.phonogram,     CH2.copy.t8, CH2.copy.b8, 'right', true ); c2beat9(); }
-async function c2beat9(){ A.beat=29; await c2explain(CH2.zoomed.determinative, CH2.copy.t9, CH2.copy.b9, 'left',  false); c2beat10(); }
+/* keepAfter hands beat 9 straight to 9.5 with the title and copy still up.
+   NEXT still fades on press, like every other NEXT in the piece — leaving a
+   pressed button sitting there looking live would read as a stall. */
+async function c2beat9(){ A.beat=29; await c2explain(CH2.zoomed.determinative, CH2.copy.t9, CH2.copy.b9, 'left',  false, true); }
+
+/* =================== 9.5 — the stone inside the sign =================== */
+/* The determinative IS a picture of a stela. Filling its outline with the
+   Rosetta Stone itself makes that legible without saying it, and gives the quiz
+   the hint it was missing. The mask is derived from the glyph's own outline in
+   stela-zoomed.jpg, so it registers exactly. */
+async function c2beat95(){
+  A.beat = 30;
+  const Z = CH2.zoomed, st = C2.stage, I = CH2.detInterior, P = CH2.stelaInPhone;
+  const fill = $('c2-detfill'), im = $('c2-detimg');
+  im.src = CFG.paths.stillPhone;
+  fill.style.webkitMaskImage = fill.style.maskImage = `url(${CH2.paths.detMask})`;
+
+  /* The mask is authored in zoomed-image space, so the layer is the whole
+     stage and the mask scales with it. */
+  fill.style.left = st.x+'px'; fill.style.top = st.y+'px';
+  fill.style.width = st.w+'px'; fill.style.height = st.h+'px';
+
+  /* Scale the still so the stele's own outline fits the arch opening, then
+     offset so the two shapes sit concentric. */
+  const sx = st.w/Z.w, sy = st.h/Z.h;
+  const openW = (I.x1-I.x0)*sx, openH = (I.y1-I.y0)*sy;
+  const s = Math.min(openW/(P.x1-P.x0), openH/(P.y1-P.y0));
+  const iw = CFG.phone.w*s, ih = CFG.phone.h*s;
+  im.style.width = iw+'px'; im.style.height = ih+'px';
+  im.style.left = (I.x0*sx + (openW - (P.x1-P.x0)*s)/2 - P.x0*s)+'px';
+  im.style.top  = (I.y0*sy + (openH - (P.y1-P.y0)*s)/2 - P.y0*s)+'px';
+
+  fadeEl(fill, 1, CH2.t.detFade);
+  await wait((CH2.t.detFade + CH2.t.detHold)*1000);
+  [fill, $('c2-title'), $('c2-body')].forEach(e=> fadeEl(e, 0, CH2.t.veilFade));
+  await wait(CH2.t.veilFade*1000);
+  c2beat10();
+}
 
 /* =================== 10 — the quiz =================== */
 async function c2beat10(){
@@ -1491,20 +1588,24 @@ async function c2beat10(){
   /* highlight goes, whole screen veils, image slides up */
   $('c2-mask').style.opacity = 0;
   c2veil(true, CH2.t.veilFade);
-  const from = C2.stage.y, to = 0.05*H, t0 = performance.now(), dur = CH2.t.slide*1000;
+  /* Slide up and return to the full beat-6 size in one move. Both happen under
+     the veil, so the resize is invisible. */
+  const a0 = Object.assign({}, C2.stage);
+  const big = finalStage();
+  const a1 = { x:big.x, y:0.05*H, w:big.w, h:big.h };
+  const t0 = performance.now(), dur = CH2.t.slide*1000;
   await new Promise(res=>{ (function slide(){
     const p = Math.min(1,(performance.now()-t0)/dur);
-    C2.stage.y = from + (to-from)*p;
+    C2.stage = { x:a0.x+(a1.x-a0.x)*p, y:a0.y+(a1.y-a0.y)*p,
+                 w:a0.w+(a1.w-a0.w)*p, h:a0.h+(a1.h-a0.h)*p };
     frame('c2-zoomwrap', C2.stage, true);
     if(p<1) requestAnimationFrame(slide); else res();
   })(); });
   await wait(CH2.t.step*1000);
 
-  /* The hole is the WHOLE image, not the inset "full highlight box" — the
-     quiz asks about all four signs, so all four have to be legible.
-     The veil has to come off in the same frame the mask goes on, or the mask's
+  /* The veil has to come off in the same frame the mask goes on, or the mask's
      hole sits underneath it and the image stays darkened. That was the bug. */
-  const hl = { x:C2.stage.x, y:C2.stage.y, w:C2.stage.w, h:C2.stage.h };
+  const hl = zoomRect(CH2.zoomed.full);
   c2mask(hl, 0);
   $('c2-mask').style.transition = '';
   $('c2-mask').style.opacity = 1;
