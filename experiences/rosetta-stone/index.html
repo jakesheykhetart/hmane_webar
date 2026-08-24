@@ -1136,6 +1136,7 @@ async function startChapter2(){
 
   $('c2-line').src = CH2.paths.line;
   $('c2-zoom').src = CH2.paths.zoomed;
+  detMaskReady();   // resolve early so beat 9.5 and the hint never wait on it
 
   /* Reset the black-out layer. Chapter 1 beat 2 ramps #ar-dim to full black to
      retire the live camera behind the double exposure; without clearing it the
@@ -1641,6 +1642,27 @@ async function c2beat9(){ A.beat=29; await c2explain(CH2.zoomed.determinative, C
 /* Position the masked stone inside the determinative's outline for whatever
    size and place the stage is currently at. Used by beat 9.5 and by the quiz
    hint, which fire at different stage sizes. */
+/* ---- mask availability ----
+   If det-mask.png 404s, WebKit does NOT hide the element — it drops the mask
+   rule and paints the layer unmasked. Beat 9.5 then renders as a rectangle of
+   the phone still showing through beat 9's highlight hole, which looks
+   deliberate and is completely wrong. Seen on device 260824 against a cached
+   404. Check the file decodes before either reveal is allowed to run. */
+const DetMask = { ok:null, p:null };
+function detMaskReady(){
+  if(DetMask.p) return DetMask.p;
+  DetMask.p = new Promise(res=>{
+    const i = new Image();
+    i.onload  = () => { DetMask.ok = true;  res(true); };
+    i.onerror = () => { DetMask.ok = false;
+      console.error(`${CH2.paths.detMask} failed to load. Beat 9.5 and the hint `+
+        `are disabled — without the mask they would render as a bare rectangle.`);
+      res(false); };
+    i.src = CH2.paths.detMask;
+  });
+  return DetMask.p;
+}
+
 function placeDetFill(){
   const Z = CH2.zoomed, st = C2.stage, I = CH2.detInterior, P = CH2.stelaInPhone;
   const fill = $('c2-detfill'), im = $('c2-detimg');
@@ -1667,6 +1689,13 @@ function placeDetFill(){
 
 async function c2beat95(){
   A.beat = 30;
+  /* No mask, no reveal. Skipping straight to the quiz is better than showing a
+     rectangle that teaches the wrong thing. */
+  if(!await detMaskReady()){
+    [$('c2-title'), $('c2-body')].forEach(e=> fadeEl(e, 0, CH2.t.veilFade));
+    await wait(CH2.t.veilFade*1000);
+    return c2beat10();
+  }
   const fill = placeDetFill();
   fadeEl(fill, 1, CH2.t.detFade);
   await wait((CH2.t.detFade + CH2.t.detHold)*1000);
@@ -1770,7 +1799,10 @@ function buildQuiz(hl, contentBottom){
     C2.buttons.push(el);
     fadeEl(el, 1, CH2.t.quizIn);
   });
-  /* Offer the hint after a beat of hesitation. */
+  /* Offer the hint after a beat of hesitation. detMaskReady is called here as
+     well as at chapter entry so the ?ch2=10 harness, which skips the entry
+     path, still resolves it before the hint can fire. */
+  detMaskReady();
   clearTimeout(C2.hintTimer);
   C2.hintTimer = setTimeout(showHint, CH2.t.hintDelay*1000);
 }
@@ -1781,6 +1813,7 @@ function buildQuiz(hl, contentBottom){
    up until the next guess, so the hint IS the teaching rather than a text tip. */
 function showHint(){
   if(C2.hintOpen) return;
+  if(DetMask.ok === false) return;   // nothing to reveal — don't offer it
   const el = $('c2-hint'), st = C2.stage, Z = CH2.zoomed, an = CH2.hintAnchor;
   const sx = st.w/Z.w, sy = st.h/Z.h;
   el.textContent = CH2.copy.hint;
