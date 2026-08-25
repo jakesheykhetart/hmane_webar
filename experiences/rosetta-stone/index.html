@@ -80,11 +80,9 @@
   .c2-frame img{position:absolute;left:0;top:0;width:100%;height:100%;display:block;}
   /* Beat 9.5 — the stone revealed inside the determinative's outline.
      Clipped with an alpha mask derived from the glyph itself. */
-  #c2-detfill{position:absolute;overflow:hidden;opacity:0;pointer-events:none;
-              -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
-              -webkit-mask-size:100% 100%;mask-size:100% 100%;
-              -webkit-mask-position:0 0;mask-position:0 0;}
-  #c2-detfill img{position:absolute;display:block;}
+  /* Beat 9.5 and the hint — the stele revealed inside the determinative.
+     A second, pre-composited copy of the plate, crossfaded over the base. */
+  #c2-stela{opacity:0;pointer-events:none;}
   #c2-mask{position:fixed;inset:0;z-index:13;pointer-events:none;opacity:0;}
   #c2-mask div{position:absolute;background:rgba(0,0,0,.55);
                backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
@@ -187,8 +185,11 @@
 <div id="c2-bg"></div>
 <div id="c2-stage">
   <div id="c2-linewrap" class="c2-frame"><img id="c2-line" alt=""></div>
-  <div id="c2-zoomwrap" class="c2-frame"><img id="c2-zoom" alt=""></div>
-  <div id="c2-detfill"><img id="c2-detimg" alt=""></div>
+  <!-- The overlay plate is a sibling of the base plate INSIDE the frame, so it
+       inherits .c2-frame img (100% x 100%) and needs no positioning of its own.
+       Both are the same 960 x 520 artwork, so fading one over the other is an
+       exact-register crossfade at any stage size. -->
+  <div id="c2-zoomwrap" class="c2-frame"><img id="c2-zoom" alt=""><img id="c2-stela" alt=""></div>
 </div>
 <div id="c2-mask"><div></div><div></div><div></div><div></div></div>
 <div id="c2-veil"></div>
@@ -955,28 +956,19 @@ const CH2 = {
     line      : './assets/images/hieroglyphic-line.jpg',
     zoomed    : './assets/images/stela-zoomed.jpg',
     audioIcon : './assets/images/audio-icon.png',
-    detMask   : './assets/images/det-mask.png',
+    /* Same 960 x 520 plate as `zoomed`, with the stele already composited into
+       the determinative. Verified byte-for-byte identical to stela-zoomed.jpg
+       everywhere except x 157-307, y 101-381 — the glyph interior — so it
+       registers exactly with no transform. */
+    stela     : './assets/images/stela-zoomed-overlay.jpg',
     wedj      : './assets/audio/HMANE_WEDJ_SOUND.m4a'
   },
 
-  /* Interior of the determinative's outline, in zoomed image space. Derived by
-     flood-filling the glyph in stela-zoomed.jpg — the outline is closed, so the
-     fill is exact and registers with the artwork automatically. */
+  /* The determinative's interior, in zoomed image space. No longer used to
+     place anything — the reveal is a pre-composited plate now — but kept
+     because it is the region stela-zoomed-overlay.jpg differs in, and the hint
+     is positioned against its bottom edge. */
   detInterior : { x0:157, y0:101, x1:307, y1:381 },
-  /* The stele's own bounding box inside the phone still's coordinate space. */
-  stelaInPhone: { x0:269, y0:127, x1:1187, y1:1983 },
-  /* Overscan on the stone inside the glyph. 1.06 was derived from the stele's
-     BOUNDING BOX and was wrong: rosetta-phone.jpg carries a soft shadowed halo
-     24-55px wide (in 1400x2100 space) around the stone, lighter than the stone
-     and darker than open wall. At 1.06 the worst point of the glyph outline sat
-     only 15px inside the silhouette — i.e. inside that halo — so a pale sliver
-     traced the arch's left and top edge on device (260824).
-     1.20 puts the whole outline at least 67px inside, clear of the halo, at a
-     cost of 8.3% cropped off each side and 10.8% off top and bottom. Measured,
-     not guessed: distance transform of the segmented stone silhouette sampled
-     at every pixel of the mask. If the still is ever re-exported, re-measure —
-     the number depends on that halo, not on the shapes. */
-  detOverscan : 1.20,
   /* Where "HINT?" sits, in zoomed image space — centred under the glyph, on the
      light plate below it. Navy on light grey; navy on the navy field would be
      invisible, which is why it lives inside the image rather than under it.
@@ -1147,7 +1139,8 @@ async function startChapter2(){
 
   $('c2-line').src = CH2.paths.line;
   $('c2-zoom').src = CH2.paths.zoomed;
-  detMaskReady();   // resolve early so beat 9.5 and the hint never wait on it
+  $('c2-stela').src = CH2.paths.stela;
+  stelaReady();     // resolve early so beat 9.5 and the hint never wait on it
 
   /* Reset the black-out layer. Chapter 1 beat 2 ramps #ar-dim to full black to
      retire the live camera behind the double exposure; without clearing it the
@@ -1648,66 +1641,61 @@ async function c2beat9(){ A.beat=29; await c2explain(CH2.zoomed.determinative, C
 /* =================== 9.5 — the stone inside the sign =================== */
 /* The determinative IS a picture of a stela. Filling its outline with the
    Rosetta Stone itself makes that legible without saying it, and gives the quiz
-   the hint it was missing. The mask is derived from the glyph's own outline in
-   stela-zoomed.jpg, so it registers exactly. */
-/* Position the masked stone inside the determinative's outline for whatever
-   size and place the stage is currently at. Used by beat 9.5 and by the quiz
-   hint, which fire at different stage sizes. */
-/* ---- mask availability ----
-   If det-mask.png 404s, WebKit does NOT hide the element — it drops the mask
-   rule and paints the layer unmasked. Beat 9.5 then renders as a rectangle of
-   the phone still showing through beat 9's highlight hole, which looks
-   deliberate and is completely wrong. Seen on device 260824 against a cached
-   404. Check the file decodes before either reveal is allowed to run. */
-const DetMask = { ok:null, p:null };
-function detMaskReady(){
-  if(DetMask.p) return DetMask.p;
-  DetMask.p = new Promise(res=>{
+   the hint it was missing.
+
+   HOW THIS IS DONE, AND WHY IT CHANGED (260824). The first build masked
+   rosetta-phone.jpg into the glyph with a CSS alpha mask and scaled the stone
+   to cover the opening. That worked geometrically but never looked right: the
+   still carries a soft shadowed halo around the stone, so unless the overscan
+   was large the halo showed as a pale sliver tracing the arch, and once the
+   overscan WAS large the stele was badly cropped. It also depended on a second
+   asset (det-mask.png), on WebKit's mask support, and on two silhouettes that
+   were never going to agree.
+
+   All of that is replaced by one pre-composited plate. stela-zoomed-overlay.jpg
+   is the same 960 x 520 artwork as stela-zoomed.jpg with the stele already
+   placed inside the determinative — verified identical everywhere except the
+   glyph interior. It is a sibling <img> inside the same frame, so it registers
+   exactly at any stage size with no transform at all, and the reveal is a plain
+   opacity crossfade. No mask, no overscan, no silhouette fitting. */
+
+/* ---- overlay availability ----
+   A missing image here fades in nothing and says nothing, so the beat would
+   silently do half its job. Check it decodes before either reveal can run. */
+const Stela = { ok:null, p:null };
+function stelaReady(){
+  if(Stela.p) return Stela.p;
+  Stela.p = new Promise(res=>{
     const i = new Image();
-    i.onload  = () => { DetMask.ok = true;  res(true); };
-    i.onerror = () => { DetMask.ok = false;
-      console.error(`${CH2.paths.detMask} failed to load. Beat 9.5 and the hint `+
-        `are disabled — without the mask they would render as a bare rectangle.`);
+    i.onload  = () => { Stela.ok = true;  res(true); };
+    i.onerror = () => { Stela.ok = false;
+      console.error(`${CH2.paths.stela} failed to load. Beat 9.5 and the hint `+
+        `are disabled — there is nothing to reveal without it.`);
       res(false); };
-    i.src = CH2.paths.detMask;
+    i.src = CH2.paths.stela;
   });
-  return DetMask.p;
+  return Stela.p;
 }
 
-function placeDetFill(){
-  const Z = CH2.zoomed, st = C2.stage, I = CH2.detInterior, P = CH2.stelaInPhone;
-  const fill = $('c2-detfill'), im = $('c2-detimg');
-  im.src = CFG.paths.stillPhone;
-  fill.style.webkitMaskImage = fill.style.maskImage = `url(${CH2.paths.detMask})`;
-
-  /* The mask is authored in zoomed-image space, so the layer is the whole
-     stage and the mask scales with it. */
-  fill.style.left = st.x+'px'; fill.style.top = st.y+'px';
-  fill.style.width = st.w+'px'; fill.style.height = st.h+'px';
-
-  /* COVER, not contain. Fitting the stele inside the opening left the still's
-     wall background showing in the corners of the arch; filling it and letting
-     a little of the stone crop reads as one object instead of a photo pasted
-     into a shape. The overscan guarantees no wall peeks at the edges. */
-  const sx = st.w/Z.w, sy = st.h/Z.h;
-  const openW = (I.x1-I.x0)*sx, openH = (I.y1-I.y0)*sy;
-  const s = Math.max(openW/(P.x1-P.x0), openH/(P.y1-P.y0)) * CH2.detOverscan;
-  im.style.width = (CFG.phone.w*s)+'px'; im.style.height = (CFG.phone.h*s)+'px';
-  im.style.left = (I.x0*sx + (openW - (P.x1-P.x0)*s)/2 - P.x0*s)+'px';
-  im.style.top  = (I.y0*sy + (openH - (P.y1-P.y0)*s)/2 - P.y0*s)+'px';
-  return fill;
+/* The reveal itself. Nothing to position — see the note above. Sets its own src
+   so every entry path works, including the ?ch2= harness, which skips the
+   chapter-entry preload. */
+function stelaOverlay(){
+  const el = $('c2-stela');
+  if(!el.getAttribute('src')) el.src = CH2.paths.stela;
+  return el;
 }
 
 async function c2beat95(){
   A.beat = 30;
-  /* No mask, no reveal. Skipping straight to the quiz is better than showing a
-     rectangle that teaches the wrong thing. */
-  if(!await detMaskReady()){
+  /* No overlay, no reveal — go straight to the quiz rather than hold on a beat
+     that has nothing to show. */
+  if(!await stelaReady()){
     [$('c2-title'), $('c2-body')].forEach(e=> fadeEl(e, 0, CH2.t.veilFade));
     await wait(CH2.t.veilFade*1000);
     return c2beat10();
   }
-  const fill = placeDetFill();
+  const fill = stelaOverlay();
   fadeEl(fill, 1, CH2.t.detFade);
   await wait((CH2.t.detFade + CH2.t.detHold)*1000);
   [fill, $('c2-title'), $('c2-body')].forEach(e=> fadeEl(e, 0, CH2.t.veilFade));
@@ -1810,10 +1798,10 @@ function buildQuiz(hl, contentBottom){
     C2.buttons.push(el);
     fadeEl(el, 1, CH2.t.quizIn);
   });
-  /* Offer the hint after a beat of hesitation. detMaskReady is called here as
+  /* Offer the hint after a beat of hesitation. The overlay is wired here as
      well as at chapter entry so the ?ch2=10 harness, which skips the entry
-     path, still resolves it before the hint can fire. */
-  detMaskReady();
+     path, still has it loaded before the hint can fire. */
+  stelaOverlay(); stelaReady();
   clearTimeout(C2.hintTimer);
   C2.hintTimer = setTimeout(showHint, CH2.t.hintDelay*1000);
 }
@@ -1824,7 +1812,7 @@ function buildQuiz(hl, contentBottom){
    up until the next guess, so the hint IS the teaching rather than a text tip. */
 function showHint(){
   if(C2.hintOpen) return;
-  if(DetMask.ok === false) return;   // nothing to reveal — don't offer it
+  if(Stela.ok === false) return;     // nothing to reveal — don't offer it
   const el = $('c2-hint'), st = C2.stage, Z = CH2.zoomed, an = CH2.hintAnchor;
   const sx = st.w/Z.w, sy = st.h/Z.h;
   el.textContent = CH2.copy.hint;
@@ -1837,7 +1825,7 @@ function showHint(){
   el.onclick = () => {
     C2.hintOpen = true;
     fadeEl(el, 0, CH2.t.veilFade); el.style.pointerEvents = 'none';
-    fadeEl(placeDetFill(), 1, CH2.t.detFade);
+    fadeEl(stelaOverlay(), 1, CH2.t.detFade);
   };
   fadeEl(el, 1, CH2.t.veilFade);
 }
@@ -1845,7 +1833,7 @@ function hideHint(){
   const el = $('c2-hint');
   clearTimeout(C2.hintTimer);
   fadeEl(el, 0, CH2.t.veilFade); el.style.pointerEvents = 'none';
-  if(C2.hintOpen){ fadeEl($('c2-detfill'), 0, CH2.t.veilFade); C2.hintOpen = false; }
+  if(C2.hintOpen){ fadeEl(stelaOverlay(), 0, CH2.t.veilFade); C2.hintOpen = false; }
 }
 
 async function answerQuiz(q){
