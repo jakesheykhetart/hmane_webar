@@ -896,8 +896,11 @@ window.addEventListener('resize', ()=>{
   orientationGuard();
   /* Chapter 2 uses beat ids 21+. Its layouts are computed on entry to each
      beat, and orientation is locked anyway, so don't let chapter 1's reflow
-     path run against elements it no longer owns. */
-  if(A.beat >= 20) return;
+     path run against elements it no longer owns.
+     The one exception is the live AR in beats 21 and 22: MindAR caches the
+     video's size and will not notice the viewport changing under it, which on
+     iOS happens every time Safari's toolbars collapse. Re-fit it, then stop. */
+  if(A.beat >= 20){ if(A.beat === 21 || A.beat === 22) keepARFitted(); return; }
   if(A.beat >= 4){
     applyStill(stillLayout('window'), 0);
     layoutBeat4(); showZoomButton();
@@ -1127,6 +1130,40 @@ function frame(id, rect, visible){
 }
 const fadeEl = (el, to, secs) => { el.style.transition = `opacity ${secs}s ease`; el.style.opacity = to; };
 
+/* =================== keeping the AR video fitted =================== */
+/* MindAR sizes its video and canvas from the container's box, once, and caches
+   it. Chapter 2 hands it a container that was display:none for the whole of
+   chapter 1, so that cache is stale on entry — and a single _resize() right
+   after unpause() is not enough to fix it:
+
+     - on iOS the video often has no metadata yet at that instant, so there is
+       nothing to fit to and the pass is wasted;
+     - Safari's URL bar and toolbar collapse a beat later, changing the viewport
+       height by ~300pt, and nothing re-fits after that;
+     - chapter 2's resize handler returns early for every beat >= 20, so the
+       one event that should have caught it was being ignored.
+
+   Any of those leaves the feed drawn at a stale size in the top-left corner on
+   a black screen. Re-fit on a short schedule after entry, on the video's own
+   readiness events, and on viewport changes while the live AR beats are up. */
+function fitAR(){
+  try {
+    const sys = document.querySelector('a-scene').systems['mindar-image-system'];
+    if(sys && sys._resize) sys._resize();
+  } catch(e){ /* scene not ready — a later pass will catch it */ }
+}
+let arFitTimers = [];
+function keepARFitted(){
+  arFitTimers.forEach(clearTimeout); arFitTimers = [];
+  requestAnimationFrame(fitAR);
+  [80, 200, 400, 800, 1500].forEach(ms => arFitTimers.push(setTimeout(fitAR, ms)));
+  const v = document.querySelector('a-scene video');
+  if(v && !v.dataset.hmaneFit){
+    v.dataset.hmaneFit = '1';
+    ['loadedmetadata','resize','playing'].forEach(ev => v.addEventListener(ev, fitAR));
+  }
+}
+
 /* =================== chapter 2 entry =================== */
 async function startChapter2(){
   A.beat = 21;
@@ -1163,8 +1200,8 @@ async function startChapter2(){
   try {
     const sys = document.querySelector('a-scene').systems['mindar-image-system'];
     sys.unpause();
-    if(sys._resize) sys._resize();     // container was display:none; re-fit the video
   } catch(e){ console.error('unpause failed', e); }
+  keepARFitted();   // container was display:none — see the note above fitAR()
 
   /* Prompt, unless the target is found straight away — no point flashing it at
      a visitor who never lowered the phone. */
@@ -1510,12 +1547,27 @@ function wedjLoad(){
 /* Web Audio should reach the speaker with the ringer switch off, but that has
    not been uniformly true across iOS versions and there is no API to query the
    switch. So say it once, quietly, the first time they ask for sound. */
+/* The label names what is playing, at the moment it plays. Shown on every
+   press, not just the first — a visitor who taps twice should get the same
+   answer both times. */
+let labelTimer = null;
+function noteAudioLabel(){
+  const lab = $('c2-audiolabel');
+  clearTimeout(labelTimer);
+  fadeEl(lab, 1, CH2.t.veilFade);
+  labelTimer = setTimeout(()=> fadeEl(lab, 0, CH2.t.veilFade), CH2.t.silentHold*1000);
+}
+
 let silentShown = false;
 function noteSilentSwitch(){
   if(silentShown) return;
   silentShown = true;
   const el = $('c2-silent'), m = S(CFG.px.margin), a = $('c2-audio');
-  const above = parseFloat(a.style.height || 0) + m + S(10);
+  /* Sits above the audio label, which sits above the button strip. Measured
+     rather than assumed, because the label wraps on a narrow phone. */
+  const lab = $('c2-audiolabel');
+  const labH = lab.getBoundingClientRect().height || S(CFG.type.body)*1.15;
+  const above = buttonZone() + S(6) + labH + S(6);
   el.textContent = CH2.copy.silent;
   el.style.fontSize = S(13)+'px';
   el.style.left = m+'px';
@@ -1526,6 +1578,7 @@ function noteSilentSwitch(){
 }
 
 function playWedj(){
+  noteAudioLabel();
   noteSilentSwitch();
   const ctx = Audio_.ctx;
   const fallback = () => {
@@ -1606,18 +1659,22 @@ async function c2explain(box, titleText, bodyText, align, withAudio, keepAfter){
     a.style.height = hgt+'px'; a.style.width = (hgt*92/72)+'px';
     a.style.left = m+'px'; a.style.bottom = m+'px'; a.style.top='auto';
     a.style.pointerEvents = 'auto';
-    /* A bare speaker icon doesn't say what the sound IS. Labelling it ties the
-       audio to the signs highlighted directly above it. */
-    const iconW = hgt*92/72, labX = m + iconW + S(10);
-    lab.style.left = labX+'px';
-    lab.style.width = (vw() - labX - m - S(CFG.type.btn)*3.2)+'px';
-    lab.style.bottom = m+'px'; lab.style.top='auto';
+    /* A bare speaker icon doesn't say what the sound IS, but a standing caption
+       beside it was worse: it had to squeeze into the gap left by the NEXT
+       button, shrank to fit, and still ran under it on a narrow phone. It is a
+       notice above the icon now, revealed on press — see noteAudioLabel(). */
+    lab.style.left = m+'px';
+    lab.style.width = (vw() - 2*m)+'px';
+    /* Clear of the whole bottom strip, not just the icon — the NEXT button is
+       taller than the icon, and at iPhone reference width the label's band
+       would otherwise cut across the top of it. */
+    lab.style.bottom = (buttonZone() + S(6))+'px'; lab.style.top='auto';
     lab.style.fontSize = S(CFG.type.body)+'px';
     lab.textContent = CH2.copy.audioLabel;
-    fitOneLine(lab, parseFloat(lab.style.width), CFG.type.body);
-    lab.style.pointerEvents = 'auto';
-    a.onclick = lab.onclick = playWedj;
-    fadeEl(a, 1, CH2.t.veilFade); fadeEl(lab, 1, CH2.t.veilFade);
+    fitOneLine(lab, vw() - 2*m, CFG.type.body);
+    lab.style.opacity = 0; lab.style.pointerEvents = 'none';
+    a.onclick = playWedj;
+    fadeEl(a, 1, CH2.t.veilFade);
     await wait(CH2.t.nextIn*1000);
   } else {
     await wait(CH2.t.nextIn*1000);
@@ -1626,6 +1683,9 @@ async function c2explain(box, titleText, bodyText, align, withAudio, keepAfter){
   $('c2-audio').style.pointerEvents='none';
   /* Beat 9 hands straight to 9.5 with the title, copy and button still on
      screen — the reveal happens under the explanation that set it up. */
+  /* Kill the label's hold timer too, or a press made a moment before NEXT can
+     fade it back in over the next beat. */
+  clearTimeout(labelTimer);
   [$('c2-audiolabel'),$('c2-silent')].forEach(e=>{ e.style.pointerEvents='none'; });
   if(keepAfter){ [$('c2-audio'),$('c2-audiolabel'),$('c2-silent')].forEach(e=>fadeEl(e,0,CH2.t.veilFade)); return c2beat95(); }
   [t,b,$('c2-audio'),$('c2-audiolabel'),$('c2-silent')].forEach(e=> fadeEl(e,0,CH2.t.veilFade));
