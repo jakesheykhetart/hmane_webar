@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>HMANE — Rosetta Stone AR — Chapter 1</title>
+<title>HMANE — Rosetta Stone — Chapters 1–3</title>
 
 <!-- Karla is SIL Open Font Licence — no purchased licence needed. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -134,6 +134,7 @@
   #cal input[type=range]{flex:1;}
   #cal .out{color:var(--gold);}
 </style>
+<link rel="stylesheet" href="./styles/chapter3.css">
 </head>
 <body>
 
@@ -225,6 +226,7 @@
   <div id="calout" class="out"></div>
 </div>
 
+<script src="./scripts/navigation.js"></script>
 <script>
 /* ===================================================================
    HMANE ROSETTA STONE — CHAPTER 1
@@ -320,7 +322,7 @@ const $ = id => document.getElementById(id);
 const vw = () => window.innerWidth;
 const vh = () => window.innerHeight;
 const isTablet = () => vw() > vh();
-const wait = ms => new Promise(r => setTimeout(r, ms));
+const wait = ms => new Promise(r => HMANEClock.timeout(r, ms));
 /* Damped type scale — linear scaling would make the 30pt title 82pt on an iPad. */
 const k = () => Math.pow(Math.min(vw(), vh()) / 375, 0.5);
 const S = n => n * k();
@@ -421,14 +423,14 @@ function setModelOpacity(v){
     (Array.isArray(o.material)?o.material:[o.material]).forEach(m => { m.opacity=v; }); }});
 }
 $('stone-target').addEventListener('targetFound', () => {
-  if(beat1Started || CAL) return;
+  if(beat1Started || CAL || window.Chapter3?.active) return;
   beat1Started = true; A.beat = 1; Audio_.beat1();
-  const t0 = performance.now(), d = CFG.t.fadeIn*1000;
+  const t0 = HMANEClock.now(), d = CFG.t.fadeIn*1000;
   (function ramp(){
-    const p = Math.min(1, (performance.now()-t0)/d);
+    const p = Math.min(1, (HMANEClock.now()-t0)/d);
     setModelOpacity(p);
-    if(p<1) requestAnimationFrame(ramp);
-    else setTimeout(beat2, CFG.t.hold*1000);
+    if(p<1) HMANEClock.frame(ramp);
+    else HMANEClock.timeout(beat2, CFG.t.hold*1000);
   })();
 });
 
@@ -445,7 +447,7 @@ async function beat2(){
   win.classList.add('blend');
   win.style.transition = `opacity ${d}s ease`;
   dim.style.transition = `opacity ${d}s ease`;
-  requestAnimationFrame(()=>{ win.style.opacity = 1; dim.style.opacity = 1; });
+  HMANEClock.frame(()=>{ win.style.opacity = 1; dim.style.opacity = 1; });
   await wait(d*1000);
 
   /* Live layer is black by now, so screen-over-black === normal-over-black. */
@@ -458,7 +460,7 @@ async function beat2(){
   layoutVeil();
   veil.style.transition = `opacity ${CFG.t.fade}s ease, backdrop-filter ${CFG.t.fade}s ease, -webkit-backdrop-filter ${CFG.t.fade}s ease, background-color ${CFG.t.fade}s ease`;
   veil.style.pointerEvents = 'auto';
-  requestAnimationFrame(()=>{
+  HMANEClock.frame(()=>{
     veil.style.opacity = 1;
     veil.style.backdropFilter = veil.style.webkitBackdropFilter = `blur(${S(CFG.b6.blur)}px)`;
     veil.style.background = `rgba(0,0,0,${CFG.b6.darken})`;
@@ -476,7 +478,7 @@ async function beat2(){
     veil.style.backdropFilter = veil.style.webkitBackdropFilter = 'blur(0px)';
     veil.style.background = 'rgba(0,0,0,0)';
     veil.style.pointerEvents = 'none';
-    setTimeout(beat3, CFG.t.fade*1000);
+    HMANEClock.timeout(beat3, CFG.t.fade*1000);
   };
 }
 
@@ -541,12 +543,12 @@ function beat4(){
   $('ui-bg').style.opacity = 1;
   applyStill(stillLayout('window'), CFG.t.shrink);
 
-  setTimeout(()=>{
+  HMANEClock.timeout(()=>{
     layoutBeat4();
     show($('title'));
     showZoomButton();
-    setTimeout(()=> show($('body')), CFG.t.bodyDelay*1000);
-    setTimeout(()=> show($('play')), (CFG.t.bodyDelay + CFG.t.btnDelay)*1000);
+    HMANEClock.timeout(()=> show($('body')), CFG.t.bodyDelay*1000);
+    HMANEClock.timeout(()=> show($('play')), (CFG.t.bodyDelay + CFG.t.btnDelay)*1000);
   }, CFG.t.shrink*1000);
 }
 
@@ -581,7 +583,7 @@ function layoutBeat4(){
   }
   styleButton(p, 'PLAY!');
   p.onclick = () => { p.onclick=null; hide($('body')); hide(p);
-                      setTimeout(beat5, (CFG.t.fade + CFG.t.iconDelay)*1000); };
+                      HMANEClock.timeout(beat5, (CFG.t.fade + CFG.t.iconDelay)*1000); };
 }
 
 function fitOneLine(el, maxW, basePt){
@@ -688,7 +690,7 @@ function beat5(){
   buildSlots(); buildStoneZones(); buildBank();
   [...A.slotEls, ...Object.values(A.caps), ...document.querySelectorAll('.rule')]
     .forEach(el => { el.style.transition = `opacity ${CFG.t.fade}s ease`;
-                     requestAnimationFrame(()=> el.style.opacity = 1); });
+                     HMANEClock.frame(()=> el.style.opacity = 1); });
 }
 
 function slotGeom(){
@@ -807,14 +809,14 @@ async function tryPlace(i){
     el.style.left=(sr.left+(sr.width-M.w)/2)+'px';
     el.style.top =(sr.top +(sr.height-M.h)/2)+'px';
     A.busy = false;
-    if(Object.keys(A.placed).length===3) setTimeout(beat6, CFG.t.winHold*1000);
+    if(Object.keys(A.placed).length===3) HMANEClock.timeout(beat6, CFG.t.winHold*1000);
   } else {
     slot.style.background='var(--red)';
     Audio_.buzz();
     el.style.left=el.dataset.homeLeft+'px';
     el.style.top =el.dataset.homeTop+'px';
     A.busy = false;
-    setTimeout(()=>{ if(A.placed[i]===undefined) slot.style.background='transparent'; },
+    HMANEClock.timeout(()=>{ if(A.placed[i]===undefined) slot.style.background='transparent'; },
                CFG.t.wrongHold*1000);
   }
 }
@@ -841,13 +843,13 @@ function beat6(){
   tx.style.fontSize=S(CFG.type.b6)+'px';
   tx.style.top=(vh()/2 - S(CFG.type.b6)/2)+'px';
   fitOneLine(tx, vw()-2*S(CFG.px.margin), CFG.type.b6);
-  requestAnimationFrame(()=>{
+  HMANEClock.frame(()=>{
     b6.style.opacity=1;
     b6.style.backdropFilter=b6.style.webkitBackdropFilter=`blur(${S(CFG.b6.blur)}px)`;
     b6.style.background=`rgba(0,0,0,${CFG.b6.darken})`;
     tx.style.transition=`opacity ${CFG.t.b6Fade}s ease`; tx.style.opacity=1;
   });
-  setTimeout(()=>{
+  HMANEClock.timeout(()=>{
     styleButton(nx,'NEXT');
     nx.style.transition=`opacity ${CFG.t.b6Fade}s ease`;
     nx.style.opacity=1; nx.style.pointerEvents='auto';
@@ -872,12 +874,14 @@ function endChapter(){
   gate.addEventListener('pointerup', ()=>{
     if(!ready) return;
     try{ const AC=window.AudioContext||window.webkitAudioContext;
-         if(AC){ const c=new AC(); c.resume(); Audio_.ctx=c; } }
+         if(AC){ const c=new AC(); c.resume(); Audio_.ctx=c; window.HMANEAudioContext=c; } }
     catch(e){ console.warn('audio unlock failed', e); }
-    try{ scene.systems['mindar-image-system'].start(); }
+    if(new URLSearchParams(location.search).get('chapter')==='3'){gate.style.display='none'; Chapter3.start(); return;}
+    if(new URLSearchParams(location.search).get('chapter')==='2'){beat1Started=true; gate.style.display='none'; try{Promise.resolve(scene.systems['mindar-image-system'].start()).then(()=>startChapter2()).catch(()=>startChapter2(true));}catch{startChapter2(true);} return;}
+    try{ Promise.resolve(scene.systems['mindar-image-system'].start()).catch(()=>{gate.style.display='none';beat1Started=true;beat2();}); }
     catch(e){ console.error('mindar start failed', e); sub.textContent='Camera unavailable'; return; }
     gate.style.transition='opacity .3s ease'; gate.style.opacity=0;
-    setTimeout(()=> gate.style.display='none', 300);
+    HMANEClock.timeout(()=> gate.style.display='none', 300);
   });
 })();
 
@@ -886,7 +890,9 @@ function endChapter(){
    and cover the screen until the device is turned back. */
 function orientationGuard(){
   const isPhoneDevice = Math.min(screen.width, screen.height) < 500;
-  const wrong = isPhoneDevice ? isTablet() : !isTablet();
+  const preview=new URLSearchParams(location.search).has('preview');
+  const wrong = !preview && (isPhoneDevice ? isTablet() : !isTablet());
+  if(wrong)HMANEClock.pause('orientation');else HMANEClock.resume('orientation');
   const r=$('rotate');
   r.style.display = wrong ? 'flex' : 'none';
   r.style.fontSize = S(CFG.type.title)+'px';
@@ -942,7 +948,7 @@ if(CAL){
   };
   ['cx','cy','cz','cs','cr'].forEach(id=> $(id).addEventListener('input', sync));
   sync();
-  $('stone-target').addEventListener('targetFound', ()=> setTimeout(()=>setModelOpacity(1),100));
+  $('stone-target').addEventListener('targetFound', ()=> HMANEClock.timeout(()=>setModelOpacity(1),100));
 }
 
 /* ===================================================================
@@ -1155,8 +1161,8 @@ function fitAR(){
 let arFitTimers = [];
 function keepARFitted(){
   arFitTimers.forEach(clearTimeout); arFitTimers = [];
-  requestAnimationFrame(fitAR);
-  [80, 200, 400, 800, 1500].forEach(ms => arFitTimers.push(setTimeout(fitAR, ms)));
+  HMANEClock.frame(fitAR);
+  [80, 200, 400, 800, 1500].forEach(ms => arFitTimers.push(HMANEClock.timeout(fitAR, ms)));
   const v = document.querySelector('a-scene video');
   if(v && !v.dataset.hmaneFit){
     v.dataset.hmaneFit = '1';
@@ -1165,19 +1171,20 @@ function keepARFitted(){
 }
 
 /* =================== chapter 2 entry =================== */
-async function startChapter2(){
+async function startChapter2(forceFallback=false){
   A.beat = 21;
 
   /* tear down chapter 1 */
   ['b6','ui','ui-bg','still-win','mask','band-label','viewer'].forEach(i=>{
     const e=$(i); if(e){ e.style.opacity=0; e.style.pointerEvents='none'; } });
   $('next').onclick = null;
-  setTimeout(()=>{ ['b6','ui','ui-bg','still-win'].forEach(i=>{const e=$(i); if(e) e.style.display='none';}); }, 300);
+  HMANEClock.timeout(()=>{ ['b6','ui','ui-bg','still-win'].forEach(i=>{const e=$(i); if(e) e.style.display='none';}); }, 300);
 
   $('c2-line').src = CH2.paths.line;
   $('c2-zoom').src = CH2.paths.zoomed;
   $('c2-stela').src = CH2.paths.stela;
   stelaReady();     // resolve early so beat 9.5 and the hint never wait on it
+  if(forceFallback){c2fallback();return;}
 
   /* Reset the black-out layer. Chapter 1 beat 2 ramps #ar-dim to full black to
      retire the live camera behind the double exposure; without clearing it the
@@ -1196,7 +1203,7 @@ async function startChapter2(){
   const target = $('stone-target');
   target.object3D.visible = false;
 
-  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+  await new Promise(r=>HMANEClock.frame(()=>HMANEClock.frame(r)));
   try {
     const sys = document.querySelector('a-scene').systems['mindar-image-system'];
     sys.unpause();
@@ -1206,14 +1213,14 @@ async function startChapter2(){
   /* Prompt, unless the target is found straight away — no point flashing it at
      a visitor who never lowered the phone. */
   let settled = false;
-  const promptTimer = setTimeout(()=>{ if(!settled) showAcquire(); }, 400);
+  const promptTimer = HMANEClock.timeout(()=>{ if(!settled) showAcquire(); }, 400);
   let onFound;
   const outcome = await Promise.race([
     new Promise(res=>{ onFound = () => res('found'); target.addEventListener('targetFound', onFound); }),
     wait(CH2.acquireTimeout*1000).then(()=> 'timeout')
   ]);
   settled = true;
-  clearTimeout(promptTimer);
+  HMANEClock.clear(promptTimer);
   target.removeEventListener('targetFound', onFound);
   hideAcquire();
 
@@ -1270,11 +1277,11 @@ function hideAcquire(){ fadeEl($('c2-acquire'), 0, CH2.t.promptFade); }
 async function c2beat1(){
   A.beat = 21;
   Audio_.beat1();
-  const t0 = performance.now(), d = CH2.t.fadeIn*1000;
+  const t0 = HMANEClock.now(), d = CH2.t.fadeIn*1000;
   await new Promise(res=>{ (function ramp(){
-    const p = Math.min(1,(performance.now()-t0)/d);
+    const p = Math.min(1,(HMANEClock.now()-t0)/d);
     setModelOpacity(p);
-    if(p<1) requestAnimationFrame(ramp); else res();
+    if(p<1) HMANEClock.frame(ramp); else res();
   })(); });
   await wait(CH2.t.hold*1000);
   c2beat2();
@@ -1292,18 +1299,18 @@ async function c2beat2(){
   pr.style.top = (vh()/2 - S(CFG.type.title))+'px';
 
   let prompted = false, crossed = null;
-  const t0 = performance.now();
+  const t0 = HMANEClock.now();
   await new Promise(res=>{ (function poll(){
-    const f = steleScreenFrac(), el = performance.now()-t0;
+    const f = steleScreenFrac(), el = HMANEClock.now()-t0;
     if(f >= need){
-      if(crossed === null) crossed = performance.now();
-      if(performance.now()-crossed >= CH2.t.settle*1000) return res();
+      if(crossed === null) crossed = HMANEClock.now();
+      if(HMANEClock.now()-crossed >= CH2.t.settle*1000) return res();
     } else {
       crossed = null;
       if(!prompted && el > 250){ prompted = true; c2veil(true, CH2.t.promptFade); fadeEl(pr,1,CH2.t.promptFade); }
     }
     if(el >= CH2.t.timeout*1000) return res();
-    requestAnimationFrame(poll);
+    HMANEClock.frame(poll);
   })(); });
 
   if(prompted){ c2veil(false, CH2.t.promptFade); fadeEl(pr,0,CH2.t.promptFade); await wait(CH2.t.promptFade*1000); }
@@ -1320,7 +1327,7 @@ async function c2beat3(){
   A.beat = 23;
   c2mask(C2.band, 0);
   $('c2-mask').style.transition = `opacity ${CH2.t.bandFade}s ease`;
-  requestAnimationFrame(()=> $('c2-mask').style.opacity = 1);
+  HMANEClock.frame(()=> $('c2-mask').style.opacity = 1);
   await wait((CH2.t.bandFade + CH2.t.bandHold)*1000);
   c2beat4();
 }
@@ -1383,10 +1390,10 @@ async function c2beat6(){
      only ever travel inward. */
   const rcx = (R.x0+R.x1)/2, rcy = (R.y0+R.y1)/2;
   const startX = b.x + rcx*s0, startY = b.y + rcy*s0;
-  const dur = CH2.t.zoom*1000, t0 = performance.now();
+  const dur = CH2.t.zoom*1000, t0 = HMANEClock.now();
 
   await new Promise(res=>{ (function step(){
-    const p = Math.min(1,(performance.now()-t0)/dur);
+    const p = Math.min(1,(HMANEClock.now()-t0)/dur);
     /* exponential in scale = constant perceived rate. Linear would look frozen
        then panicked, because this is an 18.9x move. */
     const s = s0 * Math.pow(s1/s0, p);
@@ -1418,7 +1425,7 @@ async function c2beat6(){
                             w:(R.x1-R.x0)*s, h:(R.y1-R.y0)*s}, true);
       $('c2-zoomwrap').style.opacity = k;
     }
-    if(p<1) requestAnimationFrame(step); else res();
+    if(p<1) HMANEClock.frame(step); else res();
   })(); });
 
   $('c2-linewrap').style.opacity = 0;
@@ -1553,9 +1560,9 @@ function wedjLoad(){
 let labelTimer = null;
 function noteAudioLabel(){
   const lab = $('c2-audiolabel');
-  clearTimeout(labelTimer);
+  HMANEClock.clear(labelTimer);
   fadeEl(lab, 1, CH2.t.veilFade);
-  labelTimer = setTimeout(()=> fadeEl(lab, 0, CH2.t.veilFade), CH2.t.silentHold*1000);
+  labelTimer = HMANEClock.timeout(()=> fadeEl(lab, 0, CH2.t.veilFade), CH2.t.silentHold*1000);
 }
 
 let silentShown = false;
@@ -1574,7 +1581,7 @@ function noteSilentSwitch(){
   el.style.width = (vw() - 2*m)+'px';
   el.style.bottom = above+'px'; el.style.top='auto';
   fadeEl(el, 1, CH2.t.veilFade);
-  setTimeout(()=> fadeEl(el, 0, CH2.t.veilFade), CH2.t.silentHold*1000);
+  HMANEClock.timeout(()=> fadeEl(el, 0, CH2.t.veilFade), CH2.t.silentHold*1000);
 }
 
 function playWedj(){
@@ -1685,7 +1692,7 @@ async function c2explain(box, titleText, bodyText, align, withAudio, keepAfter){
      screen — the reveal happens under the explanation that set it up. */
   /* Kill the label's hold timer too, or a press made a moment before NEXT can
      fade it back in over the next beat. */
-  clearTimeout(labelTimer);
+  HMANEClock.clear(labelTimer);
   [$('c2-audiolabel'),$('c2-silent')].forEach(e=>{ e.style.pointerEvents='none'; });
   if(keepAfter){ [$('c2-audio'),$('c2-audiolabel'),$('c2-silent')].forEach(e=>fadeEl(e,0,CH2.t.veilFade)); return c2beat95(); }
   [t,b,$('c2-audio'),$('c2-audiolabel'),$('c2-silent')].forEach(e=> fadeEl(e,0,CH2.t.veilFade));
@@ -1775,13 +1782,13 @@ async function c2beat10(){
   const a0 = Object.assign({}, C2.stage);
   const big = finalStage();
   const a1 = { x:big.x, y:0.05*H, w:big.w, h:big.h };
-  const t0 = performance.now(), dur = CH2.t.slide*1000;
+  const t0 = HMANEClock.now(), dur = CH2.t.slide*1000;
   await new Promise(res=>{ (function slide(){
-    const p = Math.min(1,(performance.now()-t0)/dur);
+    const p = Math.min(1,(HMANEClock.now()-t0)/dur);
     C2.stage = { x:a0.x+(a1.x-a0.x)*p, y:a0.y+(a1.y-a0.y)*p,
                  w:a0.w+(a1.w-a0.w)*p, h:a0.h+(a1.h-a0.h)*p };
     frame('c2-zoomwrap', C2.stage, true);
-    if(p<1) requestAnimationFrame(slide); else res();
+    if(p<1) HMANEClock.frame(slide); else res();
   })(); });
   await wait(CH2.t.step*1000);
 
@@ -1862,8 +1869,8 @@ function buildQuiz(hl, contentBottom){
      well as at chapter entry so the ?ch2=10 harness, which skips the entry
      path, still has it loaded before the hint can fire. */
   stelaOverlay(); stelaReady();
-  clearTimeout(C2.hintTimer);
-  C2.hintTimer = setTimeout(showHint, CH2.t.hintDelay*1000);
+  HMANEClock.clear(C2.hintTimer);
+  C2.hintTimer = HMANEClock.timeout(showHint, CH2.t.hintDelay*1000);
 }
 
 /* ---- the hint ----
@@ -1891,7 +1898,7 @@ function showHint(){
 }
 function hideHint(){
   const el = $('c2-hint');
-  clearTimeout(C2.hintTimer);
+  HMANEClock.clear(C2.hintTimer);
   fadeEl(el, 0, CH2.t.veilFade); el.style.pointerEvents = 'none';
   if(C2.hintOpen){ fadeEl(stelaOverlay(), 0, CH2.t.veilFade); C2.hintOpen = false; }
 }
@@ -1905,7 +1912,7 @@ async function answerQuiz(q){
     Audio_.ding();
     C2.buttons.forEach(e=> e.style.pointerEvents='none');
     document.dispatchEvent(new CustomEvent('hmane:chapter-complete',{detail:{chapter:2}}));
-    console.log('Chapter 2 complete. Chapter 3 picks up from here.');
+    Chapter3.start();
   } else {
     Audio_.buzz();                     // wrong stays tappable — unlimited attempts
     C2.busy = false;
@@ -1916,7 +1923,7 @@ async function answerQuiz(q){
 /* =================== desktop testing: ?beat=2..6 =================== */
 const SKIP = new URLSearchParams(location.search).get('beat');
 if(SKIP){
-  window.addEventListener('load', ()=> setTimeout(async ()=>{
+  window.addEventListener('load', ()=> HMANEClock.timeout(async ()=>{
     $('gate').style.display='none';
     $('ar-wrap').style.display='none';
     $('still-img').src = isTablet() ? CFG.paths.stillTablet : CFG.paths.stillPhone;
@@ -1932,7 +1939,7 @@ if(SKIP){
                  $('v-next').onclick=()=>{ ['v-title','v-body','v-next'].forEach(i=>hide($(i)));
                    veil.style.opacity=0; veil.style.pointerEvents='none';
                    veil.style.backdropFilter=veil.style.webkitBackdropFilter='blur(0px)';
-                   veil.style.background='rgba(0,0,0,0)'; setTimeout(beat3,200); }; }
+                   veil.style.background='rgba(0,0,0,0)'; HMANEClock.timeout(beat3,200); }; }
     else if(n === 3){ beat3(); }
     else { applyStill(stillLayout('window'),0);
            $('ui-bg').style.opacity=1; A.beat=4;
@@ -1948,7 +1955,7 @@ if(SKIP){
    to a plausible frozen-frame rect. */
 const SKIP2 = new URLSearchParams(location.search).get('ch2');
 if(SKIP2){
-  window.addEventListener('load', ()=> setTimeout(()=>{
+  window.addEventListener('load', ()=> HMANEClock.timeout(()=>{
     $('gate').style.display='none'; $('ar-wrap').style.display='none';
     ['b6','ui-bg','still-win'].forEach(i=>{const e=$(i); if(e) e.style.display='none';});
     $('c2-line').src = CH2.paths.line; $('c2-zoom').src = CH2.paths.zoomed;
@@ -1961,12 +1968,18 @@ if(SKIP2){
     else {
       $('c2-bg').style.opacity=1;
       const s1=W/(CH2.line.red.x1-CH2.line.red.x0);
-      C2.stage={x:0,y:H/2-(CH2.line.red.y1-CH2.line.red.y0)*s1/2,w:W,h:(CH2.line.red.y1-CH2.line.red.y0)*s1};
+      C2.stage = (n===8 || n===9) ? Object.assign({},explainStage()) : finalStage();
       frame('c2-zoomwrap',C2.stage,true);
       if(n===7) c2beat7(); else if(n===8) c2beat8(); else if(n===9) c2beat9(); else c2beat10();
     }
   }, 600));
 }
+
+/* Read-only bridge to the existing chapters; chapter selection/back restarts a clean document. */
+window.HMANELegacy={state:()=>({beat:A.beat}),lastStage:()=>C2.stage,
+  retire(){beat1Started=true;try{document.querySelector('a-scene').systems['mindar-image-system'].pause();}catch{}document.querySelectorAll('.mindar-ui-overlay').forEach(e=>e.style.display='none');['ar-wrap','c2-acquire'].forEach(id=>$(id).style.display='none');A.beat=31;}};
+window.addEventListener('load',()=>{const q=new URLSearchParams(location.search);if(q.has('ch3'))Chapter3.start(Math.max(1,Math.min(16,+q.get('ch3')||1)));});
 </script>
+<script src="./scripts/chapter3.js"></script>
 </body>
 </html>
