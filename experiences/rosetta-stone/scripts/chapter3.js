@@ -91,35 +91,45 @@ window.Chapter3 = (()=>{
   async function movement(){
     E('motion').hidden=true;root.dataset.phase='motion';
     return new Promise(resolve=>{
-      const epoch=token;let done=false,lastTime=null,impulse=0,samples=0,blockedUntil=0;
+      const epoch=token;let done=false,lastTime=null,impulse=0,samples=0,gravityX=null,quietSince=null,lastAngle=null,received=false;
+      const clearGesture=()=>{lastTime=null;impulse=0;samples=0;gravityX=null;quietSince=null;};
       const finish=()=>{if(done||K.paused||epoch!==token)return;done=true;motionCleanup();E('motion').hidden=true;E('notice').hidden=true;resolve();};
+      const notice=text=>{if(epoch!==token||done)return;E('notice').textContent=text;E('notice').hidden=false;};
       const move=e=>{
-        if(K.paused||epoch!==token){lastTime=null;impulse=0;samples=0;return;}
-        const ax=e.acceleration?.x,ay=e.acceleration?.y;
-        if(!Number.isFinite(ax))return;
-        const angle=(screen.orientation?.angle??window.orientation??0)*Math.PI/180;
-        const x=ax*Math.cos(angle)-(Number.isFinite(ay)?ay:0)*Math.sin(angle),now=K.now();
-        const dt=lastTime===null?.02:Math.min(.08,(now-lastTime)/1000);lastTime=now;
-        // Positive screen-X is rightward. Suppress its braking phase as well.
-        if(x>.4){blockedUntil=now+650;impulse=0;samples=0;return;}
-        if(now<blockedUntil)return;
-        if(x<-.35){impulse+=x*dt;samples++;if(samples>=3&&impulse<-.045)finish();}
-        else{impulse=0;samples=0;}
+        if(K.paused||epoch!==token){clearGesture();return;}
+        const angle=window.screen?.orientation?.angle??window.orientation??0;
+        if(lastAngle!==null&&angle!==lastAngle)clearGesture();lastAngle=angle;
+        const radians=angle*Math.PI/180;
+        const project=a=>Number.isFinite(a?.x)?a.x*Math.cos(radians)-(Number.isFinite(a.y)?a.y:0)*Math.sin(radians):null;
+        const linear=project(e.acceleration),gravity=project(e.accelerationIncludingGravity);
+        if(linear===null&&gravity===null)return;
+        received=true;E('notice').hidden=true;
+        // Sensor integration uses wall time, independently of the animation clock.
+        const now=Date.now(),dt=lastTime===null?.02:Math.max(.005,Math.min(.05,(now-lastTime)/1000));lastTime=now;
+        let x=linear;
+        if(x===null){
+          // Estimate the steady gravity component when linear acceleration is unavailable.
+          if(gravityX===null){gravityX=gravity;return;}
+          x=gravity-gravityX;gravityX+=(gravity-gravityX)*(1-Math.exp(-dt/.6));
+        }
+        // A short pause/noisy sample no longer discards the entire leftward gesture.
+        if(x<-.12){quietSince=null;impulse+=-x*dt;samples++;if(samples>=2&&impulse>=.012)finish();}
+        else if(x>.2){impulse=0;samples=0;quietSince=null;}
+        else{if(quietSince===null)quietSince=now;if(now-quietSince>180){impulse=0;samples=0;}}
       };
       window.addEventListener('devicemotion',move);
-      motionCleanup=()=>window.removeEventListener('devicemotion',move);
-      const unavailable=()=>{if(epoch!==token)return;E('notice').textContent='Motion access is unavailable. Enable motion access in your browser, then try again.';E('notice').hidden=false;};
-      if(typeof DeviceMotionEvent==='undefined'){unavailable();return;}
+      const watchdog=window.setTimeout(()=>{if(!received)notice('No motion readings yet. Allow motion access and open this page directly in your phone’s browser.');},5000);
+      motionCleanup=()=>{window.removeEventListener('devicemotion',move);window.clearTimeout(watchdog);E('motion').onclick=null;};
+      if(typeof DeviceMotionEvent==='undefined'){notice('Motion sensing is unavailable here. Open this experience in your phone’s browser.');return;}
       if(typeof DeviceMotionEvent.requestPermission==='function'){
         E('motion').textContent='Enable motion';E('motion').hidden=false;
         E('motion').onclick=async()=>{
-          try{const result=await DeviceMotionEvent.requestPermission();if(epoch!==token)return;
-            if(result==='granted'){E('motion').hidden=true;E('notice').hidden=true;lastTime=null;impulse=0;samples=0;}
-            else unavailable();
-          }catch{unavailable();}
+          try{const result=await DeviceMotionEvent.requestPermission();if(epoch!==token||done)return;
+            if(result==='granted'){E('motion').hidden=true;E('notice').hidden=true;clearGesture();}
+            else notice('Motion permission was denied. Allow motion access in your browser, then try again.');
+          }catch{notice('Motion access could not be enabled. Open this page directly in your phone’s browser and try again.');}
         };
       }
-      // No tap-to-start or tilt shortcut: only a leftward movement completes this prompt.
     });
   }
   async function setup3D(){if(engine)return;const THREE=window.AFRAME?.THREE;if(!THREE)throw Error('3D renderer unavailable');const res=await fetch('./assets/models/scribal-implement.glb');if(!res.ok)throw Error('Scribal model unavailable');const buffer=await res.arrayBuffer(),dv=new DataView(buffer);if(dv.getUint32(0,true)!==0x46546c67)throw Error('Invalid scribal model');const jl=dv.getUint32(12,true),j=JSON.parse(new TextDecoder().decode(new Uint8Array(buffer,20,jl))),binary=28+jl;
