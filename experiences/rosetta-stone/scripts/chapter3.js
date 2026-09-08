@@ -61,7 +61,7 @@ window.Chapter3 = (()=>{
     async 7(){setArt('sacred',fit('sacred',.5,.72));await moveRect(fit('sacred',.375,.35),1000);await sleep(1000);mask(plateRegion(regions.writing));await fade(E('mask'),true,250);const r=rect;copy('WRITING','This is the hieroglyph for writing. It resembles an ancient Egyptian scribal tool.',r.y+r.h+H()*.05,true);await fade(E('title'),true,250);await fade(E('body'),true,250);back(5,true);await sleep(250);E('audio').onclick=playAudio;await fade(E('audio'),true,250);await sleep(1000);next(8);},
     async 8(){const r=fit('sacred',.375,.35);setArt('sacred',r);const hole=plateRegion(regions.writing);setArt('isolated',hole,false);root.style.background='#000025';const end=fit('isolated',.5,1);const from={...rect};await tween(1500,t=>{const q=ease(t);setRect(Object.fromEntries(Object.keys(from).map(k=>[k,mix(from[k],end[k],q)])));const c=Math.round(255*t),b=Math.round(mix(37,255,t));root.style.background=`rgb(${c},${c},${b})`;});await sleep(1000);go(9);},
     async 9(){const movieToken=token;root.style.background='#fff';frame.hidden=true;const iso=fit('isolated',.5,1);const scale=iso.w/1019*935/608;const vrect={x:iso.x+67*iso.w/1019-196*scale,y:iso.y+245*iso.h/1543-197*scale,w:928*scale,h:1104*scale};bounds(movie,vrect);movie.hidden=false;movie.currentTime=0;movie.loop=false;await new Promise(resolve=>{movie.onended=()=>{if(movieToken===token)resolve();};movie.onerror=()=>{if(movieToken===token)error(new Error('Video unavailable'));};movie.play().catch(()=>{if(movieToken!==token)return;E('motion').textContent='Play animation';E('motion').hidden=false;E('motion').onclick=()=>{E('motion').hidden=true;movie.play().catch(error);};});});movie.hidden=true;const finalScale=vrect.w/1149;setArt('final',{x:vrect.x,y:vrect.y,w:1149*finalScale,h:1368*finalScale},false);await sleep(1000);go(10);},
-    async 10(){root.style.background='#D9DDDC';frame.hidden=true;E('three').hidden=false;centeredCopy('Loading scribal kit…');const pendingToken=token;await setup3D();if(pendingToken!==token)return;E('copy').hidden=true;engine.reset();engine.entranceView();engine.showSilhouette();engine.render();mask();centeredCopy('MOVE YOUR PHONE FROM RIGHT TO LEFT.');back(7);await movement();E('copy').hidden=true;E('mask').hidden=true;HMANENav.setBack(null);await engine.enter();await engine.to(2,1500,true);
+    async 10(){root.style.background='#D9DDDC';frame.hidden=true;E('three').hidden=false;centeredCopy('Loading scribal kit…');const pendingToken=token;await setup3D();if(pendingToken!==token)return;E('copy').hidden=true;engine.reset();engine.entranceView();engine.showSilhouette();engine.render();mask();centeredCopy('SWIPE FROM RIGHT TO LEFT.');back(7);await swipeToStart();E('copy').hidden=true;E('mask').hidden=true;HMANENav.setBack(null);await engine.enter();await engine.to(2,1500,true);
       root.dataset.phase='identify';root.style.background='#ffffff';engine.background('#ffffff');
       E('mask').hidden=true;copy('EGYPTIAN SCRIBAL KIT','',Math.max(75,H()*.15));
       E('title').style.color='#000066';E('title').style.fontSize='30pt';
@@ -88,48 +88,38 @@ window.Chapter3 = (()=>{
   function hint(){const e=E('hint');e.hidden=false;e.style.left=E('copy').offsetLeft+'px';e.style.top=rect.y+rect.h+2+'px';e.onclick=()=>{e.hidden=true;for(const [id,region] of [['sacred-hint','sacred'],['writing-hint','writing']]){const h=E(id),r=plateRegion(regions[region]);h.hidden=false;h.style.left=r.x+r.w/2+'px';h.style.top=rect.y+rect.h+2+'px';}};}
   let answering=false;
   async function answer(correct){if(answering)return;answering=true;E('hint').hidden=E('sacred-hint').hidden=E('writing-hint').hidden=true;const v=E('verdict');v.style.background=correct?'#63a152':'#a32a2a';v.firstChild.src=imgPath+(correct?'answer-correct.png':'answer-incorrect.png');v.firstChild.alt=correct?'Correct':'Try again';v.hidden=false;await sleep(1000);v.hidden=true;answering=false;hint();}
-  async function movement(){
-    E('motion').hidden=true;root.dataset.phase='motion';
+  async function swipeToStart(){
+    E('motion').hidden=true;E('notice').hidden=true;root.dataset.phase='swipe';
     return new Promise(resolve=>{
-      const epoch=token;let done=false,lastTime=null,impulse=0,samples=0,gravityX=null,quietSince=null,lastAngle=null,received=false;
-      const clearGesture=()=>{lastTime=null;impulse=0;samples=0;gravityX=null;quietSince=null;};
-      const finish=()=>{if(done||K.paused||epoch!==token)return;done=true;motionCleanup();E('motion').hidden=true;E('notice').hidden=true;resolve();};
-      const notice=text=>{if(epoch!==token||done)return;E('notice').textContent=text;E('notice').hidden=false;};
-      const move=e=>{
-        if(K.paused||epoch!==token){clearGesture();return;}
-        const angle=window.screen?.orientation?.angle??window.orientation??0;
-        if(lastAngle!==null&&angle!==lastAngle)clearGesture();lastAngle=angle;
-        const radians=angle*Math.PI/180;
-        const project=a=>Number.isFinite(a?.x)?a.x*Math.cos(radians)-(Number.isFinite(a.y)?a.y:0)*Math.sin(radians):null;
-        const linear=project(e.acceleration),gravity=project(e.accelerationIncludingGravity);
-        if(linear===null&&gravity===null)return;
-        received=true;E('notice').hidden=true;
-        // Sensor integration uses wall time, independently of the animation clock.
-        const now=Date.now(),dt=lastTime===null?.02:Math.max(.005,Math.min(.05,(now-lastTime)/1000));lastTime=now;
-        let x=linear;
-        if(x===null){
-          // Estimate the steady gravity component when linear acceleration is unavailable.
-          if(gravityX===null){gravityX=gravity;return;}
-          x=gravity-gravityX;gravityX+=(gravity-gravityX)*(1-Math.exp(-dt/.6));
-        }
-        // A short pause/noisy sample no longer discards the entire leftward gesture.
-        if(x<-.12){quietSince=null;impulse+=-x*dt;samples++;if(samples>=2&&impulse>=.012)finish();}
-        else if(x>.2){impulse=0;samples=0;quietSince=null;}
-        else{if(quietSince===null)quietSince=now;if(now-quietSince>180){impulse=0;samples=0;}}
+      const epoch=token,previousTouchAction=root.style.touchAction;
+      let start=null,done=false;
+      root.style.touchAction='none';
+      const down=e=>{
+        if(done||K.paused||epoch!==token||e.isPrimary===false||e.button>0||e.target.closest?.('button,a,input,select,textarea'))return;
+        start={id:e.pointerId,x:e.clientX,y:e.clientY};
       };
-      window.addEventListener('devicemotion',move);
-      const watchdog=window.setTimeout(()=>{if(!received)notice('No motion readings yet. Allow motion access and open this page directly in your phone’s browser.');},5000);
-      motionCleanup=()=>{window.removeEventListener('devicemotion',move);window.clearTimeout(watchdog);E('motion').onclick=null;};
-      if(typeof DeviceMotionEvent==='undefined'){notice('Motion sensing is unavailable here. Open this experience in your phone’s browser.');return;}
-      if(typeof DeviceMotionEvent.requestPermission==='function'){
-        E('motion').textContent='Enable motion';E('motion').hidden=false;
-        E('motion').onclick=async()=>{
-          try{const result=await DeviceMotionEvent.requestPermission();if(epoch!==token||done)return;
-            if(result==='granted'){E('motion').hidden=true;E('notice').hidden=true;clearGesture();}
-            else notice('Motion permission was denied. Allow motion access in your browser, then try again.');
-          }catch{notice('Motion access could not be enabled. Open this page directly in your phone’s browser and try again.');}
-        };
-      }
+      const cancel=()=>{start=null;};
+      const up=e=>{
+        if(!start||e.pointerId!==start.id)return;
+        const dx=e.clientX-start.x,dy=e.clientY-start.y;start=null;
+        if(done||K.paused||epoch!==token)return;
+        const distance=Math.max(45,Math.min(90,W()*.12));
+        if(dx>-distance||Math.abs(dx)<Math.abs(dy)*1.5)return;
+        done=true;motionCleanup();resolve();
+      };
+      root.addEventListener('pointerdown',down);
+      window.addEventListener('pointerup',up);
+      window.addEventListener('pointercancel',cancel);
+      window.addEventListener('blur',cancel);
+      document.addEventListener('visibilitychange',cancel);
+      motionCleanup=()=>{
+        root.removeEventListener('pointerdown',down);
+        window.removeEventListener('pointerup',up);
+        window.removeEventListener('pointercancel',cancel);
+        window.removeEventListener('blur',cancel);
+        document.removeEventListener('visibilitychange',cancel);
+        root.style.touchAction=previousTouchAction;start=null;
+      };
     });
   }
   async function setup3D(){if(engine)return;const THREE=window.AFRAME?.THREE;if(!THREE)throw Error('3D renderer unavailable');const res=await fetch('./assets/models/scribal-implement.glb');if(!res.ok)throw Error('Scribal model unavailable');const buffer=await res.arrayBuffer(),dv=new DataView(buffer);if(dv.getUint32(0,true)!==0x46546c67)throw Error('Invalid scribal model');const jl=dv.getUint32(12,true),j=JSON.parse(new TextDecoder().decode(new Uint8Array(buffer,20,jl))),binary=28+jl;
