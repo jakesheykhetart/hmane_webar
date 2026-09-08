@@ -144,7 +144,7 @@ window.Chapter3 = (()=>{
       map.needsUpdate=true;materialMaps[index]=map;
     }));
     const renderer=new THREE.WebGLRenderer({alpha:false,antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(W(),H());if('outputColorSpace' in renderer)renderer.outputColorSpace=THREE.SRGBColorSpace;E('three').replaceChildren(renderer.domElement);
-    const scene=new THREE.Scene();scene.background=new THREE.Color('#D9DDDC');scene.add(new THREE.HemisphereLight(0xffffff,0x777777,2));const light=new THREE.DirectionalLight(0xffffff,2.5);light.position.set(4,3,-3);scene.add(light);
+    const scene=new THREE.Scene();scene.background=new THREE.Color('#D9DDDC');scene.add(new THREE.HemisphereLight(0xffffff,0x444444,.35));const light=new THREE.DirectionalLight(0xffffff,3);light.position.set(4,3,3);scene.add(light);
     const camera=new THREE.OrthographicCamera(-1,1,1,-1,.01,30);camera.up.set(0,1,0);const groups={};for(const part of Object.keys(data.pivots)){groups[part]=new THREE.Group();scene.add(groups[part]);}
     const types={5126:Float32Array,5125:Uint32Array,5123:Uint16Array,5121:Uint8Array,5122:Int16Array};
     function accessor(index){const a=j.accessors[index],v=j.bufferViews[a.bufferView],Type=types[a.componentType],n={SCALAR:1,VEC2:2,VEC3:3,VEC4:4}[a.type],offset=binary+(v.byteOffset||0)+(a.byteOffset||0),stride=v.byteStride||n*Type.BYTES_PER_ELEMENT;let arr;if(stride===n*Type.BYTES_PER_ELEMENT)arr=new Type(buffer,offset,a.count*n).slice();else{arr=new Type(a.count*n);for(let i=0;i<a.count;i++)arr.set(new Type(buffer,offset+i*stride,n),i*n);}return new THREE.BufferAttribute(arr,n,a.normalized||false);}
