@@ -24,7 +24,14 @@ window.HMANENav = (()=>{
   function close(){if(!menu)return;menu=false;panel.hidden=true;open.setAttribute('aria-expanded','false');HMANEClock.resume();returnFocus?.focus();}
   function openMenu(){menu=true;returnFocus=document.activeElement;HMANEClock.pause();panel.hidden=false;open.setAttribute('aria-expanded','true');root.querySelector('#contents-close').focus();}
   function navigate(search){HMANEClock.cancel();document.querySelectorAll('audio,video').forEach(m=>m.pause());const u=new URL(location.href);u.search=search;u.hash='';location.assign(u.href);}
-  for(let i=1;i<=5;i++){const b=document.createElement('button');b.textContent=`Chapter ${i}`;b.dataset.chapter=i;if(i>3)b.setAttribute('aria-disabled','true');else b.onclick=()=>{close();if(i===3)window.Chapter3.start();else navigate(i===1?'':'?chapter=2');};root.querySelector('#chapter-list').append(b);}
+  const chapterLabels = [
+    'CHAPTER 1: THREE SCRIPTS, ONE STONE',
+    'CHAPTER 2: WHAT THE STONE SAYS',
+    'CHAPTER 3: THE SCRIBE’S TOOLKIT',
+    'CHAPTER 4: DECODING THE PHARAOH’S NAME',
+    'CHAPTER 5'
+  ];
+  for(let i=1;i<=5;i++){const b=document.createElement('button');b.textContent=chapterLabels[i-1];b.dataset.chapter=i;if(i>3)b.setAttribute('aria-disabled','true');else b.onclick=()=>{close();if(i===3)window.Chapter3.start();else navigate(i===1?'':'?chapter=2');};root.querySelector('#chapter-list').append(b);}
   open.onclick=openMenu;root.querySelector('#contents-close').onclick=close;back.onclick=()=>{const dest=destination;if(typeof dest==='function')dest();else if(dest)navigate(dest);};
   panel.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();close();}if(e.key==='Tab'){const list=[...panel.querySelectorAll('button')];const i=list.indexOf(document.activeElement);e.preventDefault();list[(i+(e.shiftKey?-1:1)+list.length)%list.length].focus();}});
   function setBack(dest,audio=false){destination=dest;back.hidden=!dest;back.classList.toggle('above-audio',audio);}
