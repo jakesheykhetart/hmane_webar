@@ -87,7 +87,7 @@ window.Chapter3 = (()=>{
   async function reading(region,title,body,to,prev){explainPlate();mask(plateRegion(regions[region]));copy(title,body,rect.y+rect.h+H()*.035);E('body').style.opacity=0;await fade(E('title'),true,500);await sleep(500);await fade(E('body'),true,500);back(prev);await sleep(500);await fade(E('next'),true,750);E('next').onclick=()=>go(to);}
   function hint(){const e=E('hint');e.hidden=false;e.style.left=E('copy').offsetLeft+'px';e.style.top=rect.y+rect.h+2+'px';e.onclick=()=>{e.hidden=true;for(const [id,region] of [['sacred-hint','sacred'],['writing-hint','writing']]){const h=E(id),r=plateRegion(regions[region]);h.hidden=false;h.style.left=r.x+r.w/2+'px';h.style.top=rect.y+rect.h+2+'px';}};}
   let answering=false;
-  async function answer(correct){if(answering)return;answering=true;E('hint').hidden=E('sacred-hint').hidden=E('writing-hint').hidden=true;const v=E('verdict');v.style.background=correct?'#63a152':'#a32a2a';v.firstChild.src=imgPath+(correct?'answer-correct.png':'answer-incorrect.png');v.firstChild.alt=correct?'Correct':'Try again';v.hidden=false;await sleep(1000);v.hidden=true;answering=false;hint();}
+  async function answer(correct){if(answering)return;answering=true;E('hint').hidden=E('sacred-hint').hidden=E('writing-hint').hidden=true;const v=E('verdict');v.style.background=correct?'#63a152':'#a32a2a';v.firstChild.src=imgPath+(correct?'answer-correct.png':'answer-incorrect.png');v.firstChild.alt=correct?'Correct':'Try again';v.hidden=false;await sleep(1000);v.hidden=true;answering=false;if(correct){document.dispatchEvent(new CustomEvent("hmane:chapter-complete",{detail:{chapter:3}}));window.Chapter4.start();}else hint();}
   async function swipeToStart(){
     E('motion').hidden=true;E('notice').hidden=true;root.dataset.phase='swipe';
     return new Promise(resolve=>{
@@ -166,5 +166,6 @@ window.Chapter3 = (()=>{
     };
   }
   window.addEventListener('resize',()=>{if(!active)return;if(beat===10)engine?.resize();else if([5,7,13,14,15,16].includes(beat))go(beat);});
-  return {start,get active(){return active;},get beat(){return beat;}};
+  function stop(){reset();active=false;root.hidden=true;}
+  return {start,stop,get active(){return active;},get beat(){return beat;}};
 })();

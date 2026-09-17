@@ -31,11 +31,12 @@ window.HMANENav = (()=>{
     'CHAPTER 4: DECODING THE PHARAOH’S NAME',
     'CHAPTER 5'
   ];
-  for(let i=1;i<=5;i++){const b=document.createElement('button');b.textContent=chapterLabels[i-1];b.dataset.chapter=i;if(i>3)b.setAttribute('aria-disabled','true');else b.onclick=()=>{close();if(i===3)window.Chapter3.start();else navigate(i===1?'':'?chapter=2');};root.querySelector('#chapter-list').append(b);}
+  for(let i=1;i<=5;i++){const b=document.createElement('button');b.textContent=chapterLabels[i-1];b.dataset.chapter=i;if(i>4)b.setAttribute('aria-disabled','true');else b.onclick=()=>{close();if(i===3&&!window.Chapter4?.active)window.Chapter3.start();else navigate(i===1?'':i===3?'?ch3=1':'?chapter='+i);};root.querySelector('#chapter-list').append(b);}
   open.onclick=openMenu;root.querySelector('#contents-close').onclick=close;back.onclick=()=>{const dest=destination;if(typeof dest==='function')dest();else if(dest)navigate(dest);};
   panel.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();close();}if(e.key==='Tab'){const list=[...panel.querySelectorAll('button')];const i=list.indexOf(document.activeElement);e.preventDefault();list[(i+(e.shiftKey?-1:1)+list.length)%list.length].focus();}});
   function setBack(dest,audio=false){destination=dest;back.hidden=!dest;back.classList.toggle('above-audio',audio);}
   window.setInterval(()=>{
+    if(window.Chapter4?.active){root.style.visibility=window.Chapter4.busy?'hidden':'visible';root.querySelectorAll('[data-chapter]').forEach(b=>b.setAttribute('aria-current',b.dataset.chapter==='4'?'true':'false'));return;}
     if(!window.HMANELegacy)return;
     const info=HMANELegacy.state();const active=window.Chapter3?.active;
     const verdict=parseFloat(getComputedStyle(document.querySelector('#answer')).opacity)>.05||document.querySelector('#c3-verdict:not([hidden])');root.style.visibility=verdict?'hidden':'visible';
