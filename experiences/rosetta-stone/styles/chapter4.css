@@ -7,3 +7,11 @@
 /* Anchor copy to the actual image edge on both phones and portrait tablets. */
 #c4-copy{top:calc(var(--cart-bottom, 35vh) + 28px)}#c4-copy h1:empty{display:none}#c4[data-mode=game] #c4-copy{top:calc(var(--cart-bottom,35vh) + 22px)}#c4-bank{top:max(53%,calc(var(--cart-bottom,35vh) + 108px))}#c4[data-mode=conceal] #c4-copy{top:74%}
 #c4 #c4-name{color:#8b8db1}
+
+/* Right-to-left demonstration and persistent reading cue. */
+#c4[data-mode=game] #c4-direction{top:calc(17% - 23px);left:53.5%;width:43%;font-size:clamp(10px,2.7vw,14px);white-space:nowrap;pointer-events:none}
+#c4-direction-demo{position:absolute;left:0;right:0;height:90px;z-index:4;background:var(--navy);color:var(--gold);text-align:center;pointer-events:none}
+#c4-direction-demo p{margin:2px 12px;font-size:clamp(12px,3.4vw,18px)}
+#c4-direction-demo span{position:absolute;top:28px;font-size:38px;line-height:1;transform:translateX(-50%)}
+#c4-slots .c4-start-here{border:4px solid var(--gold);background:rgba(235,181,99,.22)}
+#c4[data-mode=game] #c4-name{top:7.5%}
