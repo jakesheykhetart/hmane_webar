@@ -29,7 +29,7 @@ window.HMANENav = (()=>{
     'CHAPTER 2: WHAT THE STONE SAYS',
     'CHAPTER 3: THE SCRIBE’S TOOLKIT',
     'CHAPTER 4: DECODING THE PHARAOH’S NAME',
-    'CHAPTER 5'
+    'CHAPTER 5: BACK TO THE STONE'
   ];
   for(let i=1;i<=5;i++){const b=document.createElement('button');b.textContent=chapterLabels[i-1];b.dataset.chapter=i;b.onclick=()=>{close();if(i===3&&!window.Chapter4?.active&&!window.Chapter5?.active)window.Chapter3.start();else navigate(i===1?'':i===3?'?ch3=1':'?chapter='+i);};root.querySelector('#chapter-list').append(b);}
   open.onclick=openMenu;root.querySelector('#contents-close').onclick=close;back.onclick=()=>{const dest=destination;if(typeof dest==='function')dest();else if(dest)navigate(dest);};

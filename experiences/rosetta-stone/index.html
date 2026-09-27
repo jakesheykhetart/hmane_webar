@@ -1979,6 +1979,7 @@ if(SKIP2){
 
 /* Read-only bridge to the existing chapters; chapter selection/back restarts a clean document. */
 window.HMANELegacy={state:()=>({beat:A.beat}),lastStage:()=>C2.stage,
+  projectTarget, // Shared calibrated target-to-screen projection for Chapters 2 and 5.
   retire(){beat1Started=true;try{document.querySelector('a-scene').systems['mindar-image-system'].pause();}catch{}document.querySelectorAll('.mindar-ui-overlay').forEach(e=>e.style.display='none');['ar-wrap','c2-acquire'].forEach(id=>$(id).style.display='none');A.beat=31;}};
 window.addEventListener('load',()=>{const q=new URLSearchParams(location.search);if(q.has('ch3'))Chapter3.start(Math.max(1,Math.min(16,+q.get('ch3')||1)));});
 </script>
