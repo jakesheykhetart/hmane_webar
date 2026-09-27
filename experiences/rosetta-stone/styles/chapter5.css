@@ -1,0 +1,20 @@
+#c5{position:fixed;inset:0;z-index:17;background:var(--navy);color:var(--grey);font:300 18px/1.35 Karla,sans-serif;overflow:hidden}
+#c5.c5-live{background:transparent}#c5-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#c5 button{font:300 clamp(16px,4vw,23px)/1.15 Karla,sans-serif;cursor:pointer;touch-action:manipulation;color:var(--gold);background:var(--navy);border:3px solid var(--gold);padding:.5em .8em;min-height:44px}
+#c5 button:focus-visible{outline:3px solid white;outline-offset:4px}
+#c5-next{position:absolute;right:16px;bottom:max(16px,env(safe-area-inset-bottom));z-index:3}
+#c5-skip{position:absolute;bottom:max(16px,env(safe-area-inset-bottom));right:16px;font-size:16px!important;max-width:65%}
+#c5-captions p{position:absolute;margin:0;font-size:clamp(13px,3.5vw,19px);line-height:1.2;text-align:left}
+#c5-copy{position:absolute;overflow-y:auto;padding:0 2px 8px;text-align:left}
+#c5-copy h1{font:300 clamp(23px,5.8vw,34px)/1.12 Karla,sans-serif;color:var(--grey);margin:0 0 22px}
+#c5-copy p{font-size:clamp(18px,4.5vw,24px);margin:0;line-height:1.45}
+#c5-topic{position:absolute;bottom:82px;left:5%;width:90%;text-align:center;background:rgba(0,0,70,.88);padding:10px 12px;border-radius:3px}
+#c5-topic h2{font:300 clamp(20px,5vw,29px)/1.15 Karla,sans-serif;color:var(--gold);margin:0 0 8px}
+#c5-topic p{margin:0;font-size:clamp(13px,3.3vw,18px)}
+.c5-topic-labels{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+#c5-status{position:absolute;top:70px;left:8%;width:84%;margin:0;text-align:center;background:rgba(0,0,70,.9);padding:12px;font-size:18px}
+#c5-status:empty{display:none}
+@media(min-aspect-ratio:1/1){#c5-copy h1{font-size:26px;margin-bottom:16px}#c5-copy p{font-size:19px}#c5-topic{left:auto;right:3%;width:24%;bottom:100px}.c5-topic-labels{display:block}.c5-topic-labels p{margin:12px 0!important}#c5-status{left:25%;width:50%}}
+@media(max-height:650px){#c5-copy h1{font-size:22px;margin-bottom:12px}#c5-copy p{font-size:17px}#c5-topic{bottom:74px;padding:7px}#c5-topic h2{font-size:19px}#c5-captions p{font-size:13px}}
+
+#c5[data-view=cards] #c5-status{top:auto;bottom:18px;left:5%;width:90%;font-size:15px;padding:6px}
