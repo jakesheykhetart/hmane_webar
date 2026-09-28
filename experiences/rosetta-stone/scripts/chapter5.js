@@ -14,7 +14,7 @@ window.Chapter5 = (() => {
   document.body.append(root);
   const E=id=>document.getElementById('c5-'+id),ctx=E('canvas').getContext('2d'),images=new Map(),pending=new Map();
   const mix=(a,b,t)=>a+(b-a)*t, ease=t=>t*t*(3-2*t), out=t=>1-(1-t)*(1-t), clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
-  let active=false,busy=false,beat=0,epoch=0,data,loading,frameID,arSession=0,arSystem=null,arLive=false,found=false,foundAt=0,lostAt=0,arTickID,readyHandler=null;
+  let active=false,busy=false,beat=0,epoch=0,data,loading,frameID,arSession=0,arSystem=null,arLive=false,found=false,foundAt=0,lostAt=0,arTickID;
   let S={}, cards=[], lastCheckpoint=1;
   const labels=['hieroglyphs','Demotic','Greek'];
   const colors={stela:'#000066',scripts:'#101010',ptolemy:'#ebb563'};
@@ -107,10 +107,8 @@ window.Chapter5 = (() => {
   async function acquire(){resetZoom();setBeat(17);lastCheckpoint=17;S.mode='stone';S.groups=[];S.guide=true;E('topic').hidden=true;E('status').textContent='Point your camera at the stone. Match its outline loosely.';E('skip').hidden=false;E('skip').onclick=()=>fallback('Continuing on the image.');draw();const token=++arSession;let trackerReady=false,idleSince=null;found=false;foundAt=0;E('status').textContent='Starting camera… Allow camera access when prompted.';
     const scene=document.querySelector('a-scene'),target=document.getElementById('stone-target');arSystem=scene.systems?.['mindar-image-system'];if(!arSystem){fallback('Camera unavailable. Continuing on the image.');return;}
     document.getElementById('stone-model').object3D.visible=false;
-    target.object3D.visible=false;
-    readyHandler=()=>{if(!active||token!==arSession)return;trackerReady=true;arSystem._resize?.();document.querySelectorAll('.mindar-ui-overlay').forEach(e=>e.style.display='none');};scene.addEventListener('arReady',readyHandler);
     target.addEventListener('targetFound',onFound);target.addEventListener('targetLost',onLost);scene.addEventListener('arError',onError);const wrap=document.getElementById('ar-wrap');wrap.style.display='block';wrap.style.zIndex='16';
-    function acquireTick(){if(!active||token!==arSession)return;const now=K.now();const video=scene.querySelector('video')||wrap.querySelector('video');if(video?.readyState>=2&&!arLive){arLive=true;root.classList.add('c5-live');S.mode='ar';E('status').textContent='Preparing stone recognition…';}
+    function acquireTick(){if(!active||token!==arSession)return;const now=K.now();const video=scene.querySelector('video')||wrap.querySelector('video');if(video?.readyState>=2&&!arLive){arLive=true;root.classList.add('c5-live');S.mode='ar';arSystem._resize?.();E('status').textContent='Preparing stone recognition…';}
       // Permission and cold tracker initialization are not visitor inactivity.
       // Give the visitor a full ten seconds once both video and tracking are ready.
       if(arLive&&trackerReady){if(idleSince===null){idleSince=now;E('status').textContent='Point your camera at the stone. Match its outline loosely.';}if(found)idleSince=now;else if(now-idleSince>=10000){fallback('Continuing on the image.');return;}}
@@ -118,14 +116,12 @@ window.Chapter5 = (() => {
       draw();arTickID=K.frame(acquireTick);
     }
     arTickID=K.frame(acquireTick);
-    // MindAR 1.2.5 start() is synchronous and returns undefined. Its arReady
-    // event, after target loading and GPU warmup, is the readiness boundary.
-    try{const result=arSystem.start();if(result?.catch)result.catch(e=>{if(token===arSession)onError(e);});}catch(e){if(token===arSession)onError(e);}
+    try{await arSystem.start();if(token!==arSession){if(!active||!arLive)arSystem.stop();return;}trackerReady=true;arSystem._resize?.();document.querySelectorAll('.mindar-ui-overlay').forEach(e=>e.style.display='none');}catch(e){if(token===arSession)fallback('Camera unavailable. Continuing on the image.');}
   }
   function onFound(){if(!active||beat!==17)return;found=true;lostAt=0;}
   function onLost(){found=false;foundAt=0;if(arLive)lostAt=K.now();}
   function onError(){if(active&&beat===17)fallback('Camera unavailable. Continuing on the image.');}
-  function detachAR(){if(readyHandler){document.querySelector('a-scene').removeEventListener('arReady',readyHandler);readyHandler=null;}document.getElementById('stone-target').removeEventListener('targetFound',onFound);document.getElementById('stone-target').removeEventListener('targetLost',onLost);document.querySelector('a-scene').removeEventListener('arError',onError);}
+  function detachAR(){document.getElementById('stone-target').removeEventListener('targetFound',onFound);document.getElementById('stone-target').removeEventListener('targetLost',onLost);document.querySelector('a-scene').removeEventListener('arError',onError);}
   function trackFinale(token){const tick=()=>{if(!active||token!==arSession)return;if(!found&&lostAt&&K.now()-lostAt>1500){fallback('Tracking lost. Continuing on the image.');return;}E('canvas').style.visibility=found?'visible':'hidden';draw();arTickID=K.frame(tick);};tick();}
   function fallback(message){if(!active||beat!==17)return;cancel();detachAR();stopCamera();E('canvas').style.visibility='';S.mode='stone';S.guide=false;E('skip').hidden=true;E('status').textContent=message;draw();run(finale);}
   async function finale(){S.highlightAlpha=1;S.guide=false;S.groups=['stela','scripts','ptolemy'];S.pulse=null;E('skip').hidden=true;E('status').textContent='';E('topic').hidden=false;E('topic').innerHTML='<h2>The signs we explored</h2><p>These are the signs we covered in this experience.</p>';for(let i=0;i<3;i++)await tween(500,t=>S.borderPulse=1+Math.sin(Math.PI*t));S.borderPulse=1;await readingHold(2000);S.groups=[];draw();for(let i=0;i<3;i++){S.scriptIndex=i;E('topic').innerHTML='';const h=document.createElement('h2');h.textContent=['Hieroglyphs','Demotic','Greek'][i];E('topic').append(h);await tween(1400*READING_TIME_SCALE,t=>S.scriptGlow=.30*Math.sin(Math.PI*t));}S.scriptIndex=-1;await tween(700*READING_TIME_SCALE,t=>S.highlightAlpha=1-t);S.groups=[];S.highlightAlpha=1;E('status').textContent='';E('topic').innerHTML='<h2>Three scripts. One decree.</h2><p>You can now find familiar names, words, and signs on the stone.</p>';draw();document.dispatchEvent(new CustomEvent('hmane:chapter-complete',{detail:{chapter:5}}));button('FINISH',()=>{stopCamera();detachAR();E('canvas').style.visibility='';S.mode='stone';S.groups=[];draw();E('topic').innerHTML='<h2>Thank you for exploring.</h2><p>Take another look at the stone.</p>';button('REPLAY CHAPTER',()=>start());});}
@@ -138,7 +134,7 @@ window.Chapter5 = (() => {
   canvas.addEventListener('pointerdown',e=>{if(beat!==16)return;pointers.set(e.pointerId,[e.clientX,e.clientY]);canvas.setPointerCapture(e.pointerId);});
   canvas.addEventListener('pointermove',e=>{if(beat!==16||!pointers.has(e.pointerId))return;const old=[...pointers.values()],previous=pointers.get(e.pointerId);pointers.set(e.pointerId,[e.clientX,e.clientY]);const now=[...pointers.values()];if(now.length===2){const distance=p=>Math.hypot(p[0][0]-p[1][0],p[0][1]-p[1][1]);changeZoom(zoom*distance(now)/Math.max(1,distance(old)),(now[0][0]+now[1][0])/2,(now[0][1]+now[1][1])/2);}else if(zoom>1){panX+=e.clientX-previous[0];panY+=e.clientY-previous[1];boundPan();draw();}});
   for(const type of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(type,e=>pointers.delete(e.pointerId));
-  window.addEventListener('resize',()=>{if(active){if(arLive&&arSystem?.controller)arSystem._resize?.();draw();}});
+  window.addEventListener('resize',()=>{if(active){arSystem?._resize?.();draw();}});
   window.addEventListener('pagehide',()=>{if(active)stop();});
   window.addEventListener('load',()=>{const q=new URLSearchParams(location.search);if(q.get('chapter')==='5'||q.has('ch5'))start(+q.get('ch5')||1);});
   return {start,stop,get active(){return active;},get busy(){return busy;},get beat(){return beat;},get arState(){return {live:arLive,found,stableFor:foundAt?K.now()-foundAt:0};}};
