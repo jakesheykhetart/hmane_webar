@@ -18,3 +18,12 @@
 @media(max-height:650px){#c5-copy h1{font-size:22px;margin-bottom:12px}#c5-copy p{font-size:17px}#c5-topic{bottom:74px;padding:7px}#c5-topic h2{font-size:19px}#c5-captions p{font-size:13px}}
 
 #c5[data-view=cards] #c5-status{top:auto;bottom:18px;left:5%;width:90%;font-size:15px;padding:6px}
+/* User-paced, spatially anchored stone exploration. */
+#c5[data-beat="16"] #c5-canvas{pointer-events:auto;touch-action:none;cursor:grab}
+#c5-stone-labels{pointer-events:none;position:absolute;inset:0}
+#c5-stone-labels p{position:absolute;box-sizing:border-box;margin:0;padding:5px 8px;background:rgba(0,0,102,.68);color:#fff;text-align:center;font-size:clamp(12px,3.2vw,17px);line-height:1.2}
+#c5-back{position:absolute;left:16px;bottom:max(16px,env(safe-area-inset-bottom));z-index:3}
+#c5-zoom-controls{position:absolute;right:12px;top:112px;display:flex;gap:5px;z-index:3}
+#c5-zoom-controls[hidden]{display:none}
+#c5-zoom-controls button{font-size:16px;padding:5px 10px;background:rgba(0,0,102,.75)}
+#c5[data-beat="16"] #c5-status{top:65px;left:10%;width:80%;font-size:14px;padding:6px}
