@@ -12,7 +12,7 @@
   <script src="config.js"></script>
   <!-- AR libraries load in the background during the splash and intro -->
   <script defer src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-v1.5.0.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <script defer src="vendor/mindar-image-aframe-1.2.5-hmane.js"></script>
   <script defer src="portal-ar.js"></script>
   <script defer src="portal.js"></script>
 </head>
@@ -51,7 +51,6 @@
     <div id="arUi">
       <button id="helpBtn" class="hm-btn hm-btn--square" type="button" aria-label="How to use the portal">?</button>
       <div id="hint" class="hint" role="status">
-        <div class="hint__thumbs" aria-hidden="true"></div>
         <p class="hint__text"></p>
       </div>
       <div id="arStatus" class="ar-status" role="status" hidden>

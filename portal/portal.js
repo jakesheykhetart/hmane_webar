@@ -30,7 +30,6 @@
   els.begin.textContent = TXT.begin;
   els.retry.textContent = TXT.retry;
   els.expClose.textContent = TXT.backToPortal;
-  els.hint.querySelector('.hint__thumbs').innerHTML = CFG.objects.map(o => `<img src="${o.thumb}" alt="">`).join('');
 
   // ---------- media for this screen shape ----------
   const landscape = matchMedia('(orientation: landscape)').matches;
@@ -222,6 +221,27 @@
     const arm = () => { clearTimeout(idle); idle = setTimeout(() => { if (state !== 'splash' && !inExperience) location.href = location.pathname; }, CFG.idleResetMinutes * 60000); };
     ['pointerdown', 'keydown'].forEach(ev => addEventListener(ev, arm, { passive: true }));
     arm();
+  }
+
+  // ---------- diagnostics: add ?debug=1 to the URL ----------
+  if (params.get('debug') === '1') {
+    const hud = document.createElement('pre');
+    hud.className = 'debug-hud';
+    document.body.appendChild(hud);
+    setInterval(() => {
+      const AR = window.HMANE_AR, sc = AR && AR.sceneEl;
+      const sys = sc && sc.systems && sc.systems['mindar-image-system'];
+      const v = sys && sys.video, ctl = sys && sys.controller;
+      const st = (ctl && ctl.trackingStates) || [];
+      hud.textContent = [
+        'state: ' + state + (AR && AR.running ? ' · AR running' : ' · AR off'),
+        'camera: ' + (v && v.videoWidth ? v.videoWidth + '×' + v.videoHeight : '—'),
+        ...CFG.objects.map(o => {
+          const s = st[o.targetIndex];
+          return o.id + ': ' + (s ? (s.showing ? 'TRACKED' : s.isTracking ? 'locking…' : 'searching') : '—');
+        })
+      ].join('\n');
+    }, 300);
   }
 
   // ---------- go ----------

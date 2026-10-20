@@ -90,7 +90,11 @@ window.HMANE_CONFIG = {
     filterMinCF: 0.0005,  // lower = steadier halo when still
     filterBeta: 50,       // higher = less lag when moving
     warmupTolerance: 3,
-    missTolerance: 8
+    missTolerance: 8,
+    // Ask for an HD camera feed. MindAR's default (~640 px) is too small to recognise objects
+    // from more than a step or two away.
+    cameraWidth: 1280,
+    cameraHeight: 720
   },
 
   // Museum tablets: return to the splash after this many minutes without interaction (0 = off)

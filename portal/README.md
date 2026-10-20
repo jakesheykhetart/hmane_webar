@@ -25,7 +25,8 @@ It will then be live at:
 |---|---|
 | `config.js` | **Edit here**: all copy, timings, object links, halo look, tracking tuning |
 | `index.html`, `portal.css`, `portal.js` | Flow + UI |
-| `portal-ar.js` | Halo + tap logic (A-Frame 1.5.0 + MindAR 1.2.5 from jsDelivr) |
+| `portal-ar.js` | Halo + tap logic; asks for an HD (720p) camera feed |
+| `vendor/mindar-image-aframe-1.2.5-hmane.js` | MindAR 1.2.5 with one patch: a 2× larger detection window so objects are recognised from further away |
 | `assets/video/intro-phone.mp4` | 720×1280, 2.5 Mbps, 7.3 MB (was 27 MB) |
 | `assets/video/intro-tablet.mp4` | 1920×1080, 4 Mbps, 8.6 MB (was 22 MB) |
 | `assets/targets/targets.mind` | Compiled tracking targets: 0 = Rosetta, 1 = Dream Stela |
@@ -48,3 +49,8 @@ Landscape screens (museum tablets) get the 16:9 video and splash; portrait scree
 - If a halo jitters, lower `filterBeta` in `config.js`. If it lags behind when moving, raise it.
 - Visitors need to be a few steps from each object. Neither object gets recognised from the gallery doorway.
 - Exact dimensions aren't needed for tracking. The halo is drawn in the reference image's own proportions.
+
+## Testing
+- Add **`?debug=1`** to the URL (e.g. `…/portal/?debug=1`) to show a small readout: camera resolution, plus each object's status: `searching`, `locking…` or `TRACKED`.
+- **Desk testing:** pointing the phone at the Matterport tour on a laptop is much harder than the real gallery. Screen blur, the warm colour cast and the tour's hotspot labels painted over the stone all hurt recognition. For a desk test, open `assets/targets/ref-dream-stela.jpg` or `ref-rosetta.jpg` full-screen and fill most of the phone's view with it.
+

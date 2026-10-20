@@ -113,6 +113,27 @@
     }
   });
 
+  // ---------- HD camera ----------
+  // MindAR requests the camera with no size, which most phones answer with ~640x480.
+  // Wrap getUserMedia so its request also asks for HD.
+  (function patchCamera() {
+    const md = navigator.mediaDevices;
+    if (!md || !md.getUserMedia || md.__hmanePatched) return;
+    const orig = md.getUserMedia.bind(md);
+    md.getUserMedia = (c) => {
+      if (c && c.video && typeof c.video === 'object' && !c.video.width) {
+        const long = CFG.tracking.cameraWidth || 1280, short = CFG.tracking.cameraHeight || 720;
+        const portrait = innerHeight > innerWidth;   // ask in the screen's orientation so nothing gets cropped
+        c = Object.assign({}, c, { video: Object.assign({}, c.video, {
+          width: { ideal: portrait ? short : long },
+          height: { ideal: portrait ? long : short }
+        }) });
+      }
+      return orig(c);
+    };
+    md.__hmanePatched = true;
+  })();
+
   // ---------- AR controller ----------
   const AR = window.HMANE_AR = {
     _halos: [],
