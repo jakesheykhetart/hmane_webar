@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#000127">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>HMANE Digital Museum</title>
+  <link rel="preload" href="assets/targets/targets.mind" as="fetch" crossorigin>
+  <link rel="preload" href="fonts/ApercuPro-Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="portal.css">
+  <script src="config.js"></script>
+  <!-- AR libraries load in the background during the splash and intro -->
+  <script defer src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-v1.5.0.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <script defer src="portal-ar.js"></script>
+  <script defer src="portal.js"></script>
+</head>
+<body class="state-splash">
+
+  <!-- 1. Splash -->
+  <section id="splash" class="screen" aria-label="HMANE Digital Museum">
+    <picture>
+      <source media="(orientation: landscape)" srcset="assets/img/splash-tablet.jpg">
+      <img src="assets/img/splash-phone.jpg" alt="The entrance of the Harvard Museum of the Ancient Near East">
+    </picture>
+    <button id="tapToBegin" class="hm-btn hm-btn--prompt" type="button"></button>
+  </section>
+
+  <!-- 2. Intro video -->
+  <section id="intro" class="screen" aria-hidden="true">
+    <video id="introVideo" playsinline webkit-playsinline preload="auto" aria-label="Intro: arriving at the HMANE Digital Museum"></video>
+    <button id="skipIntro" class="hm-btn hm-btn--corner" type="button" hidden></button>
+  </section>
+
+  <!-- 3. Coded text cards -->
+  <section id="cards" class="screen" aria-live="polite">
+    <div id="cardWelcome" class="card">
+      <h1 class="card__title"></h1>
+    </div>
+    <div id="cardGalleries" class="card">
+      <h2 class="card__title"></h2>
+      <p class="card__body"></p>
+    </div>
+    <button id="beginBtn" class="hm-btn hm-btn--corner" type="button" hidden></button>
+  </section>
+
+  <!-- 4. Live AR -->
+  <section id="ar" class="screen" aria-label="Live camera view">
+    <div id="arStage"></div>
+    <div id="arUi">
+      <button id="helpBtn" class="hm-btn hm-btn--square" type="button" aria-label="How to use the portal">?</button>
+      <div id="hint" class="hint" role="status">
+        <div class="hint__thumbs" aria-hidden="true"></div>
+        <p class="hint__text"></p>
+      </div>
+      <div id="arStatus" class="ar-status" role="status" hidden>
+        <p class="ar-status__text"></p>
+        <button id="retryBtn" class="hm-btn" type="button" hidden></button>
+      </div>
+      <div id="toast" class="toast" role="status" hidden></div>
+    </div>
+  </section>
+
+  <!-- 5. Experience opened inside the portal -->
+  <section id="experience" class="screen" aria-label="Experience" hidden>
+    <iframe id="expFrame" title="Experience" allow="camera; microphone; autoplay; fullscreen; accelerometer; gyroscope; xr-spatial-tracking" allowfullscreen></iframe>
+    <button id="expClose" class="hm-btn hm-btn--back" type="button"></button>
+  </section>
+
+  <noscript><p class="noscript">This experience needs JavaScript.</p></noscript>
+</body>
+</html>
