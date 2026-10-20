@@ -179,6 +179,7 @@
       u.searchParams.set('from', 'portal');
       els.frame.src = u.toString();
       els.exp.hidden = false;
+      els.exp.classList.add('is-on');               // .screen layers are invisible until switched on
       body.classList.add('in-experience');
     }, 280);                                       // let the tap flash read first
   }
@@ -187,6 +188,7 @@
     inExperience = null;
     els.frame.src = 'about:blank';
     els.exp.hidden = true;
+    els.exp.classList.remove('is-on');
     body.classList.remove('in-experience');
     show('ar'); setHint(false);
     setStatus(TXT.startingCamera, { loading: true });
