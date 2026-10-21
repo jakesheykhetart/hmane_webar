@@ -82,7 +82,18 @@
       this.mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthTest: false, depthWrite: false });
       const halo = new THREE.Mesh(new THREE.PlaneGeometry(W, Ht), this.mat);
       halo.renderOrder = 10;
-      this.el.setObject3D('halo', halo);
+      this.haloMesh = halo;
+      // The halo lives in its own group at scene level, driven by a smoothed copy of the tracked pose
+      // (see tick), so tracking noise doesn't make the outline jump around.
+      this.group = new THREE.Group();
+      this.group.matrixAutoUpdate = false;
+      this.group.visible = false;
+      this.group.add(halo);
+      this.el.sceneEl.object3D.add(this.group);
+      this.anchor3D = this.el.parentEl.object3D;
+      this.sp = new THREE.Vector3(); this.sq = new THREE.Quaternion(); this.ss = new THREE.Vector3();
+      this.tp = new THREE.Vector3(); this.tq = new THREE.Quaternion(); this.ts = new THREE.Vector3();
+      this.hasPose = false;
 
       // invisible tap plate in the object's shape, slightly enlarged for forgiving taps
       const cx = local.reduce((s, p) => s + p[0], 0) / local.length;
@@ -91,25 +102,47 @@
       const hit = new THREE.Mesh(new THREE.ShapeGeometry(shape),
         new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
       hit.userData.objectId = obj.id;
-      this.el.setObject3D('hit', hit);
+      this.group.add(hit);
       this.hit = hit;
 
       this.found = false; this.foundAt = 0; this.flashAt = -1e9;
       const anchor = this.el.parentEl;
       anchor.addEventListener('targetFound', () => { this.found = true; this.foundAt = performance.now(); AR._onFound(obj.id, true); });
-      anchor.addEventListener('targetLost', () => { this.found = false; this.mat.opacity = 0; AR._onFound(obj.id, false); });
+      anchor.addEventListener('targetLost', () => { this.found = false; this.mat.opacity = 0; this.hasPose = false; this.group.visible = false; AR._onFound(obj.id, false); });
       AR._halos.push(this);
     },
     flash() { this.flashAt = performance.now(); },
-    tick() {
-      if (!this.found) return;
+    tick(t, dt) {
+      if (!this.found || !this.anchor3D.visible) { this.group.visible = false; this.hasPose = false; return; }
+      this._smoothPose(Math.min(dt || 16, 100));
       const H = CFG.halo, now = performance.now();
       const fade = Math.min(1, (now - this.foundAt) / H.fadeInMs);
       const pulse = 1 - H.pulseDepth * 0.5 * (1 - Math.cos((now / H.pulseMs) * Math.PI * 2));
       const flash = Math.max(0, 1 - (now - this.flashAt) / 350);
       this.mat.opacity = Math.min(1, fade * pulse + flash);
       const s = 1 + 0.03 * flash;
-      this.el.getObject3D('halo').scale.set(s, s, 1);
+      this.haloMesh.scale.set(s, s, 1);
+    },
+    // Adaptive smoothing: small differences (tracking noise while the visitor holds still) are smoothed
+    // heavily; large ones (the visitor actually moving) are followed quickly so the halo doesn't lag.
+    _smoothPose(dt) {
+      const S = CFG.smoothing || {};
+      this.anchor3D.matrix.decompose(this.tp, this.tq, this.ts);
+      if (!this.hasPose) {
+        this.sp.copy(this.tp); this.sq.copy(this.tq); this.ss.copy(this.ts); this.hasPose = true;
+      } else {
+        const size = Math.max(1e-6, this.ts.x);                 // 1 unit = object width
+        const err = this.sp.distanceTo(this.tp) / size + this.sq.angleTo(this.tq) * 0.6;
+        const lo = S.stillBelow ?? 0.006, hi = S.movingAbove ?? 0.06;
+        let k = Math.min(1, Math.max(0, (err - lo) / (hi - lo)));
+        k = k * k * (3 - 2 * k);
+        const tau = (S.stillMs ?? 260) + ((S.movingMs ?? 50) - (S.stillMs ?? 260)) * k;
+        const a = 1 - Math.exp(-dt / tau);
+        this.sp.lerp(this.tp, a); this.sq.slerp(this.tq, a); this.ss.lerp(this.ts, a);
+      }
+      this.group.matrix.compose(this.sp, this.sq, this.ss);
+      this.group.matrixWorldNeedsUpdate = true;
+      this.group.visible = true;
     }
   });
 
@@ -143,6 +176,7 @@
     onFoundChange: null,   // (anyFound:boolean) => void
     onTap: null,           // (objectConfig) => void
     onReady: null,
+    onVideo: null,
     onError: null,
 
     mount(stage) {
@@ -165,6 +199,26 @@
       this._bindTaps(stage);
     },
 
+    // Build the tracking engine's GPU programs and load the targets while the intro plays, so the
+    // camera view is ready almost as soon as permission is granted. Safe to call more than once.
+    prewarm() {
+      if (this._warm) return this._warm;
+      this._warm = (async () => {
+        const t0 = performance.now();
+        const portrait = innerHeight > innerWidth;
+        const W = portrait ? (CFG.tracking.cameraHeight || 720) : (CFG.tracking.cameraWidth || 1280);
+        const H = portrait ? (CFG.tracking.cameraWidth || 1280) : (CFG.tracking.cameraHeight || 720);
+        const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+        const g = cv.getContext('2d'); g.fillStyle = '#777'; g.fillRect(0, 0, W, H);
+        const C = new window.MINDAR.IMAGE.Controller({ inputWidth: W, inputHeight: H, maxTrack: CFG.tracking.maxTrack });
+        await C.addImageTargets(CFG.tracking.targets);
+        await C.dummyRun(cv);
+        try { C.dispose(); if (C.worker && C.worker.terminate) C.worker.terminate(); } catch (e) {}
+        this.warmMs = Math.round(performance.now() - t0);
+      })().catch(e => console.warn('AR prewarm failed (will warm on start instead)', e));
+      return this._warm;
+    },
+
     _whenLoaded() {
       return new Promise(res => this.sceneEl.hasLoaded ? res() : this.sceneEl.addEventListener('loaded', res, { once: true }));
     },
@@ -180,6 +234,7 @@
         v.muted = true; v.defaultMuted = true; v.playsInline = true;
         v.setAttribute('aria-hidden', 'true');
         v.addEventListener('loadedmetadata', () => v.play().catch(() => {}), { once: true });
+        v.addEventListener('playing', () => this.onVideo && this.onVideo(), { once: true });
       }
     },
 

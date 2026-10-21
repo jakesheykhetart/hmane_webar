@@ -29,6 +29,9 @@
   els.galleries.querySelector('.card__body').innerHTML = lines(TXT.galleriesBody);
   els.begin.textContent = TXT.begin;
   els.retry.textContent = TXT.retry;
+  // thumbnails of the objects to look for (shown while searching)
+  els.hint.querySelector('.hint__thumbs').innerHTML =
+    CFG.objects.map(o => `<img src="${o.thumb}" alt="${o.title}">`).join('');
   els.expClose.textContent = TXT.backToPortal;
 
   // ---------- media for this screen shape ----------
@@ -56,6 +59,7 @@
     show('intro');
     if (p && p.catch) p.catch(() => { v.muted = true; v.play().catch(() => endIntro()); });
     setTimeout(() => { if (state === 'intro') { els.skip.hidden = false; els.skip.classList.add('fade-in'); } }, T.skipAppearsAfter);
+    setTimeout(warmUpAR, 1200);   // after the video has started smoothly
   }
   els.splash.addEventListener('click', startIntro);
 
@@ -135,16 +139,27 @@
     fade(els.galleries, false, 300);
     setHint(false);
     setStatus(TXT.startingCamera, { loading: true });
+    const AR = await ensureMounted();
+    await AR.start();
+  }
+  async function ensureMounted() {
     const AR = await waitForAR();
     if (!arMounted) {
       arMounted = true;
+      AR.onVideo = () => setStatus('');          // show the camera as soon as it's live
       AR.onReady = () => setStatus('');
       AR.onError = () => setStatus(TXT.cameraError, { retry: true });
       AR.onFoundChange = (any) => setHint(any);
       AR.onTap = openExperience;
       AR.mount(els.stage);
     }
-    await AR.start();
+    return AR;
+  }
+  // Warm up tracking in the background during the intro (no camera needed), then build the AR scene
+  async function warmUpAR() {
+    const AR = await waitForAR();
+    await AR.prewarm();
+    await ensureMounted();
   }
   els.retry.addEventListener('click', () => { location.href = location.pathname + '?start=ar'; });
 

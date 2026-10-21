@@ -13,7 +13,7 @@ window.HMANE_CONFIG = {
     galleriesBody: ['Hold your device up to the gallery', '& tap on highlighted objects.'],
     begin: 'Begin',
     resume: 'Continue',
-    hintSearching: 'Point your camera at a glowing object',
+    hintSearching: 'Hold your device up to one of these objects',
     hintFound: 'Tap the glowing object to explore',
     startingCamera: 'Starting camera…',
     cameraError: 'We need your camera to show the gallery overlays. Please allow camera access and try again.',
@@ -95,6 +95,14 @@ window.HMANE_CONFIG = {
     // from more than a step or two away.
     cameraWidth: 1280,
     cameraHeight: 720
+  },
+
+  // ---- Halo smoothing (removes tracking jitter) ----
+  smoothing: {
+    stillMs: 260,       // how slowly the halo settles while the phone is held still (higher = steadier)
+    movingMs: 50,       // how quickly it follows real movement (lower = less lag)
+    stillBelow: 0.006,  // pose differences below this (fraction of object width) count as jitter
+    movingAbove: 0.06   // differences above this count as real movement
   },
 
   // Museum tablets: return to the splash after this many minutes without interaction (0 = off)
