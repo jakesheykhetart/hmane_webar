@@ -26,11 +26,11 @@ It will then be live at:
 | `config.js` | **Edit here**: all copy, timings, object links, halo look, tracking tuning |
 | `index.html`, `portal.css`, `portal.js` | Flow + UI |
 | `portal-ar.js` | Halo + tap logic; asks for an HD (720p) camera feed |
-| `vendor/mindar-image-aframe-1.2.5-hmane.js` | MindAR 1.2.5 with one patch: a 2× larger detection window so objects are recognised from further away |
+| `vendor/mindar-image-aframe-1.2.5-hmane.js` | MindAR 1.2.5, patched: 2× larger detection window; tracks from 256 px images (MindAR default 128 px); realistic phone field of view; skips extra views of an object already tracked |
 | `assets/video/intro-phone.mp4` | 720×1280, 2.5 Mbps, 7.3 MB (was 27 MB) |
 | `assets/video/intro-tablet.mp4` | 1920×1080, 4 Mbps, 8.6 MB (was 22 MB) |
-| `assets/targets/targets.mind` | Compiled tracking targets: 0 = Rosetta, 1 = Dream Stela |
-| `assets/targets/ref-*.jpg` | The reference images the targets and outlines came from |
+| `assets/targets/targets.mind` | 10 compiled tracking views: 0–4 Rosetta, 5–9 Dream Stela (6.6 MB, loads during the intro) |
+| `assets/targets/views/*.jpg` | The gallery photos/frames each view was compiled from (for recompiling) |
 
 Landscape screens (museum tablets) get the 16:9 video and splash; portrait screens get 9:16. Only one video is downloaded.
 
@@ -43,12 +43,17 @@ Landscape screens (museum tablets) get the 16:9 video and splash; portrait scree
   The Rosetta page also receives `?from=portal`, so it can hide its own exit or menu if needed.
 - **Museum tablets:** set `idleResetMinutes` in `config.js` (e.g. 3) to return loaner tablets to the splash between visitors.
 
-## Tracking notes (to check on site)
-- The Dream Stela target is built from your gallery photo, rectified onto the render. It was detected in every gallery shot tested, and the outline locks tightly.
-- Rosetta was detected in all four gallery shots. Its outline fits best straight-on; at steep side angles the fit loosens.
-- If a halo jitters, lower `filterBeta` in `config.js`. If it lags behind when moving, raise it.
-- Visitors need to be a few steps from each object. Neither object gets recognised from the gallery doorway.
-- Exact dimensions aren't needed for tracking. The halo is drawn in the reference image's own proportions.
+## Tracking notes
+- Each object has 5 views from your Nov 2 gallery captures (front, angles, close-ups, and for the Rosetta Stone a side-on view including the wall panels). Each view carries the full outline in its own coordinates, so the halo lands on the object's edges whichever view is recognised.
+- Measured on your walk-through videos, with the share of frames where the object is recognised before → after:
+  - Dream Stela arc: 47% → 84%
+  - Dream Stela close-ups: 28% → 71%
+  - Rosetta walk-in: 68% → 91%
+  - Rosetta close-ups: 27% → 64%
+  - No frame was ever matched to the wrong object.
+- Still hard: almost fully side-on views, heavy motion blur, and very far away.
+- To add a view: add the photo to `assets/targets/views/`, recompile all views in order into `targets.mind`, and add an entry (with its outline) under the object's `targets` in `config.js`.
+- If a halo jitters, raise `smoothing.stillMs` in `config.js`. If it lags when moving, lower `smoothing.movingMs`.
 
 ## Testing
 - Add **`?debug=1`** to the URL (e.g. `…/portal/?debug=1`) to show a small readout: camera resolution, plus each object's status: `searching`, `locking…` or `TRACKED`.

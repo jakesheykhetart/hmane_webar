@@ -208,10 +208,11 @@ body { position: fixed; inset: 0; }
   transition: opacity 400ms ease;
 }
 .hint__thumbs { display: flex; gap: 8px; flex: none; transition: opacity 300ms ease; }
+.hint__thumbs { gap: 12px; }
 .hint__thumbs img {
-  height: clamp(52px, 9vmin, 84px); width: auto; display: block;
-  outline: 2px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 0 10px 2px rgba(255, 255, 255, 0.55);
+  height: clamp(56px, 10vmin, 92px); width: auto; display: block;
+  /* transparent cut-outs: the glow follows each object's silhouette, like the halo in the camera view */
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 6px rgba(255, 255, 255, 0.6));
 }
 .hint__text { margin: 0; font-size: clamp(14px, 3.6vmin, 20px); line-height: 1.35; color: #fff; }
 /* once an object is recognised: thumbnails go, the tap prompt is centred */

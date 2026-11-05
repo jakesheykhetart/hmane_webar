@@ -1,7 +1,9 @@
 /* HMANE Central Portal — live AR layer (A-Frame + MindAR image tracking)
- * Each clickable object is a MindAR image target. A glowing outline is drawn once into a
- * texture and pinned to the tracked target, so it follows the object's edges in perspective
- * as the visitor moves. Taps are ray-cast against an invisible plate the shape of the object.
+ * Each clickable object has one or more MindAR image targets ("views": photos from different
+ * angles and distances). Each view carries the object's outline in its own image coordinates, so
+ * whichever view is recognised, the glowing outline lands exactly on the object's edges and follows
+ * them in perspective. Only one halo per object is shown at a time. Taps are ray-cast against an
+ * invisible plate the shape of the object.
  */
 (function () {
   const CFG = window.HMANE_CONFIG;
@@ -26,11 +28,15 @@
     return pts.map(([u, v]) => [u - 0.5, (0.5 - v) * aspect]);
   }
 
-  function buildHaloTexture(local, aspect, H) {
-    const size = Math.sqrt(aspect);                 // geometric mean of width and height (width = 1)
+  // The outline can extend past the view's image (close-up views), so the texture covers the outline's own box.
+  function buildHaloTexture(local, H) {
+    const xs = local.map(p => p[0]), ys = local.map(p => p[1]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const bw = maxX - minX, bh = maxY - minY, cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    const size = Math.sqrt(bw * bh);                // object's average side, in this view's units
     const core = H.coreWidth * size, glow = H.glowWidth * size;
     const pad = glow * 2.5;
-    const W = 1 + 2 * pad, Ht = aspect + 2 * pad;
+    const W = bw + 2 * pad, Ht = bh + 2 * pad;
     const scale = H.textureSize / Math.max(W, Ht);
     const cw = Math.ceil(W * scale), ch = Math.ceil(Ht * scale);
     const canvas = document.createElement('canvas');
@@ -38,7 +44,7 @@
     const ctx = canvas.getContext('2d');
     const path = new Path2D();
     local.forEach(([x, y], i) => {
-      const px = (x + W / 2) * scale, py = (Ht / 2 - y) * scale;
+      const px = (x - cx + W / 2) * scale, py = (Ht / 2 - (y - cy)) * scale;
       i ? path.lineTo(px, py) : path.moveTo(px, py);
     });
     path.closePath();
@@ -61,7 +67,11 @@
     const tex = new THREE.CanvasTexture(canvas);
     if ('colorSpace' in tex) tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 4;
-    return { tex, W, Ht };
+    return { tex, W, Ht, cx, cy };
+  }
+  // A view = one image target of an object. Older single-target config entries still work.
+  function viewsOf(obj) {
+    return obj.targets || [{ index: obj.targetIndex, w: obj.target.w, h: obj.target.h, outline: obj.outline }];
   }
   function hexToRgb(h) {
     const n = parseInt(h.replace('#', ''), 16);
@@ -70,18 +80,20 @@
 
   // ---------- halo component ----------
   AFRAME.registerComponent('hmane-halo', {
-    schema: { object: { type: 'string' } },
+    schema: { object: { type: 'string' }, view: { type: 'int', default: 0 } },
     init() {
       const obj = CFG.objects.find(o => o.id === this.data.object);
+      const view = viewsOf(obj)[this.data.view];
       const H = CFG.halo;
-      this.obj = obj;
-      const aspect = obj.target.h / obj.target.w;
-      const local = toLocal(chaikin(obj.outline, H.smoothing), aspect);
+      this.obj = obj; this.targetIndex = view.index;
+      const aspect = view.h / view.w;
+      const local = toLocal(chaikin(view.outline, H.smoothing), aspect);
 
-      const { tex, W, Ht } = buildHaloTexture(local, aspect, H);
+      const { tex, W, Ht, cx: hx, cy: hy } = buildHaloTexture(local, H);
       this.mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthTest: false, depthWrite: false });
       const halo = new THREE.Mesh(new THREE.PlaneGeometry(W, Ht), this.mat);
       halo.renderOrder = 10;
+      halo.position.set(hx, hy, 0);
       this.haloMesh = halo;
       // The halo lives in its own group at scene level, driven by a smoothed copy of the tracked pose
       // (see tick), so tracking noise doesn't make the outline jump around.
@@ -107,13 +119,25 @@
 
       this.found = false; this.foundAt = 0; this.flashAt = -1e9;
       const anchor = this.el.parentEl;
-      anchor.addEventListener('targetFound', () => { this.found = true; this.foundAt = performance.now(); AR._onFound(obj.id, true); });
-      anchor.addEventListener('targetLost', () => { this.found = false; this.mat.opacity = 0; this.hasPose = false; this.group.visible = false; AR._onFound(obj.id, false); });
+      anchor.addEventListener('targetFound', () => {
+        this.found = true;
+        if (!AR._active[obj.id]) { AR._active[obj.id] = this; this.foundAt = performance.now(); }
+        AR._onFound(obj.id);
+      });
+      anchor.addEventListener('targetLost', () => {
+        this.found = false; this.mat.opacity = 0; this.hasPose = false; this.group.visible = false;
+        if (AR._active[obj.id] === this) {          // hand over to another view of the same object, if any
+          const next = AR._halos.find(h => h !== this && h.obj === obj && h.found) || null;
+          AR._active[obj.id] = next;
+          if (next) next.foundAt = performance.now() - CFG.halo.fadeInMs;   // no second fade-in
+        }
+        AR._onFound(obj.id);
+      });
       AR._halos.push(this);
     },
     flash() { this.flashAt = performance.now(); },
     tick(t, dt) {
-      if (!this.found || !this.anchor3D.visible) { this.group.visible = false; this.hasPose = false; return; }
+      if (!this.found || !this.anchor3D.visible || AR._active[this.obj.id] !== this) { this.group.visible = false; this.hasPose = false; return; }
       this._smoothPose(Math.min(dt || 16, 100));
       const H = CFG.halo, now = performance.now();
       const fade = Math.min(1, (now - this.foundAt) / H.fadeInMs);
@@ -167,10 +191,25 @@
     md.__hmanePatched = true;
   })();
 
+  // ---------- tracker tuning (hooks in the vendored MindAR) ----------
+  // Track from the 256 px reference image instead of MindAR's 128 px default: far more reliable lock-on
+  // with real gallery photos, where the object is only part of the frame.
+  window.HMANE_TRACK_KEYFRAME = CFG.tracking.highDetailTracking === false ? 1 : 0;
+  // MindAR assumes a 45° field of view across the frame's height. On an upright phone the height is the
+  // long side, where real phone cameras see ~60–70°, so poses were estimated with the wrong lens.
+  window.HMANE_adjustController = (ctl) => {
+    const fov = CFG.tracking.cameraFovLongSide;
+    if (!fov) return;
+    const W = ctl.inputWidth, H = ctl.inputHeight, f = (Math.max(W, H) / 2) / Math.tan(fov * Math.PI / 360);
+    ctl.projectionTransform = [[f, 0, W / 2], [0, f, H / 2], [0, 0, 1]];
+    ctl.projectionMatrix = ctl._glProjectionMatrix({ projectionTransform: ctl.projectionTransform, width: W, height: H, near: 10, far: 100000 });
+  };
+
   // ---------- AR controller ----------
   const AR = window.HMANE_AR = {
     _halos: [],
     _found: new Set(),
+    _active: {},           // object id -> the halo (view) currently shown for it
     sceneEl: null,
     running: false,
     onFoundChange: null,   // (anyFound:boolean) => void
@@ -182,8 +221,8 @@
     mount(stage) {
       if (this.sceneEl) return;
       const T = CFG.tracking;
-      const anchors = CFG.objects.map(o =>
-        `<a-entity mindar-image-target="targetIndex: ${o.targetIndex}"><a-entity hmane-halo="object: ${o.id}"></a-entity></a-entity>`).join('');
+      const anchors = CFG.objects.map(o => viewsOf(o).map((v, k) =>
+        `<a-entity mindar-image-target="targetIndex: ${v.index}"><a-entity hmane-halo="object: ${o.id}; view: ${k}"></a-entity></a-entity>`).join('')).join('');
       stage.innerHTML =
         `<a-scene embedded
             mindar-image="imageTargetSrc: ${T.targets}; maxTrack: ${T.maxTrack}; autoStart: false; uiLoading: no; uiScanning: no; uiError: no;
@@ -194,7 +233,16 @@
            ${anchors}
          </a-scene>`;
       this.sceneEl = stage.querySelector('a-scene');
-      this.sceneEl.addEventListener('arReady', () => { this.running = true; this.onReady && this.onReady(); });
+      this.sceneEl.addEventListener('arReady', () => {
+        this.running = true;
+        // Don't spend detection effort (or a tracking slot) on other views of an object that's already tracked
+        const ctl = this._sys().controller;
+        if (ctl) ctl.skipTarget = (idx) => {
+          const h = this._halos.find(x => x.targetIndex === idx);
+          return !!h && this._halos.some(x => x !== h && x.obj === h.obj && x.found);
+        };
+        this.onReady && this.onReady();
+      });
       this.sceneEl.addEventListener('arError', (e) => { this.running = false; this.onError && this.onError(e.detail); });
       this._bindTaps(stage);
     },
@@ -246,14 +294,15 @@
       sys.anchorEntities.forEach(a => { try { a.el.updateWorldMatrix(null); } catch (e) {} });
       this.running = false;
       this._halos.forEach(h => { h.found = false; h.mat.opacity = 0; });
+      this._active = {};
       this._found.clear();
       this.onFoundChange && this.onFoundChange(false);
     },
 
     _sys() { return this.sceneEl.systems['mindar-image-system']; },
 
-    _onFound(id, on) {
-      on ? this._found.add(id) : this._found.delete(id);
+    _onFound(id) {
+      this._halos.some(h => h.obj.id === id && h.found) ? this._found.add(id) : this._found.delete(id);
       this.onFoundChange && this.onFoundChange(this._found.size > 0);
     },
 
@@ -271,7 +320,7 @@
         const r = canvas.getBoundingClientRect();
         ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
         ray.setFromCamera(ndc, cam);
-        const live = this._halos.filter(h => h.found);
+        const live = this._halos.filter(h => h.found && this._active[h.obj.id] === h);
         if (!live.length) return;
         const hits = ray.intersectObjects(live.map(h => h.hit), false);
         if (!hits.length) return;

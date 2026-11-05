@@ -254,8 +254,10 @@
         'state: ' + state + (AR && AR.running ? ' · AR running' : ' · AR off'),
         'camera: ' + (v && v.videoWidth ? v.videoWidth + '×' + v.videoHeight : '—'),
         ...CFG.objects.map(o => {
-          const s = st[o.targetIndex];
-          return o.id + ': ' + (s ? (s.showing ? 'TRACKED' : s.isTracking ? 'locking…' : 'searching') : '—');
+          const views = o.targets || [{ index: o.targetIndex, name: 'main' }];
+          const on = views.find(v => st[v.index] && st[v.index].showing);
+          const lock = views.find(v => st[v.index] && st[v.index].isTracking);
+          return o.id + ': ' + (!st.length ? '—' : on ? 'TRACKED (' + (on.name || on.index) + ')' : lock ? 'locking…' : 'searching');
         })
       ].join('\n');
     }, 300);
