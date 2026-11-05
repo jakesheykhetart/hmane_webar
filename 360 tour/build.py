@@ -2,8 +2,8 @@
 """Builds one language-picker page per object.
 
 Edit OBJECTS below, then run:  python3 build.py
-Standalone pages for the Panoply 360 tour (not part of the AR portal).
-Each object becomes  panoply-360-tour/<slug>/index.html, plus the list page  panoply-360-tour/index.html.
+Standalone pages for the Panoee 360 tour (not part of the AR portal).
+Each object becomes  360 tour/<slug>/index.html, plus the list page  360 tour/index.html.
 Buttons appear in the order listed; an object gets exactly as many buttons as it has links.
 """
 import html, json, os
@@ -171,7 +171,7 @@ def object_page(slug, title, langs):
     <button class="back" type="button" id="back">Languages</button>
     <p class="player__lang" id="playerLang"></p>
   </div>
-  <div class="player__frame" id="frame"></div>
+  <div class="player__stage"><div class="player__frame" id="frame"></div></div>
 </section>
 <script src="../videos.js"></script>
 </body>

@@ -70,32 +70,49 @@ body {
 @media (prefers-reduced-motion: reduce) { .lang { transition: none; } }
 
 /* ---------- In-page player ---------- */
+/* While a video plays, the page is exactly one screen tall:
+   small title, then the language bar, then the video filling everything left. */
+body.is-playing {
+  height: 100vh; height: 100dvh; overflow: hidden;
+  display: flex; flex-direction: column;
+}
 body.is-playing .subtitle,
 body.is-playing .note,
 body.is-playing .grid { display: none; }
-body.is-playing .page { padding-bottom: 0; }
+body.is-playing .page {
+  flex: none; max-width: none;
+  padding-top: max(10px, env(safe-area-inset-top)); padding-bottom: 0;
+}
+body.is-playing .title {
+  font-size: max(14px, calc(clamp(26px, 5.4vw, 60px) / 3));
+  letter-spacing: 0.06em;
+}
 
 .player {
-  max-width: 1500px; margin: 0 auto;
-  padding: clamp(14px, 2.5vw, 32px) max(16px, env(safe-area-inset-right))
-           max(28px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  flex: 1 1 auto; min-height: 0;
+  /* the video's width, shared with the bar above it so their edges line up */
+  --vw: min(100cqw, (100cqh - 56px) * 16 / 9);
+  container-type: size;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px max(10px, env(safe-area-inset-right))
+           max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
 }
-@media (min-width: 700px) { .player { padding-left: 40px; padding-right: 40px; } }
 .player[hidden] { display: none; }
 
 .player__bar {
+  flex: none; width: var(--vw, 100%);
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  margin: 0 auto clamp(12px, 2vw, 24px);
+  margin-bottom: 8px;
 }
-.player__lang { margin: 0; font-size: clamp(17px, 2.2vw, 26px); color: var(--body); text-align: right; }
+.player__lang { margin: 0; font-size: clamp(15px, 1.8vw, 22px); color: var(--body); text-align: right; }
 
 /* matches the HMANE Next button */
 .back {
-  font-family: var(--font); font-size: clamp(14px, 1.6vw, 20px);
+  font-family: var(--font); font-size: clamp(13px, 1.3vw, 17px);
   letter-spacing: 0.06em; text-transform: uppercase; line-height: 1;
   color: var(--gold); background: transparent;
   border: 3px solid var(--gold); border-radius: 0;
-  padding: 0.8em 1.15em 0.72em; min-height: 44px; cursor: pointer;
+  padding: 0.75em 1.1em 0.67em; min-height: 40px; cursor: pointer;
   -webkit-appearance: none; appearance: none;
 }
 .back::before { content: '\2190\00a0'; }
@@ -103,15 +120,14 @@ body.is-playing .page { padding-bottom: 0; }
 .back:focus { outline: none; }
 .back:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 
-/* 16:9, but never taller than what's left of the screen; the bar matches its width */
-.player__bar, .player__frame {
-  width: min(100%, calc((100vh - var(--chrome)) * 16 / 9));
-  width: min(100%, calc((100dvh - var(--chrome)) * 16 / 9));
+/* The stage measures the space left under the bar; the video is the largest 16:9 that fits it. */
+.player__stage {
+  flex: 1 1 auto; min-height: 0; width: 100%;
+  display: flex; align-items: flex-start; justify-content: center;
 }
-.player { --chrome: 230px; }
-@media (min-width: 700px) { .player { --chrome: 300px; } }
 .player__frame {
-  position: relative; margin: 0 auto;
+  position: relative;
+  width: var(--vw);
   aspect-ratio: 16 / 9;
   background: #000; border: var(--bw) solid var(--gold);
 }

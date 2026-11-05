@@ -1,4 +1,4 @@
-// Language picker for the Panoply 360 tour.
+// Language picker for the Panoee 360 tour.
 // Tap a language: its gold border doubles, then the video plays on this page.
 // "Languages" returns to the grid with the choice still marked.
 // Without JavaScript the buttons fall back to opening YouTube directly.
