@@ -51,13 +51,8 @@
       },
       {
         "language": "Spanish",
-        "region": "Spain",
+        "region": "",
         "url": "https://youtu.be/L2OgqzgosOw"
-      },
-      {
-        "language": "Spanish",
-        "region": "Mexico",
-        "url": "https://youtu.be/XN2c06jqB7c"
       },
       {
         "language": "Italian",
@@ -70,34 +65,19 @@
         "url": "https://youtu.be/z2pMQmS4FCs"
       },
       {
-        "language": "German",
-        "region": "Germany",
-        "url": "https://youtu.be/YYi3HTtrqfc"
-      },
-      {
         "language": "Chinese",
-        "region": "Mandarin",
-        "url": "https://youtu.be/XS2skYx4eoQ"
-      },
-      {
-        "language": "Chinese",
-        "region": "Simplified Mandarin",
+        "region": "",
         "url": "https://youtu.be/qp-ngTc9rOY"
       },
       {
         "language": "Arabic",
-        "region": "Egypt",
+        "region": "",
         "url": "https://youtu.be/XeKf3kDOHjw"
       },
       {
         "language": "French",
         "region": "",
         "url": "https://youtu.be/VsYqtRGte7A"
-      },
-      {
-        "language": "French",
-        "region": "France",
-        "url": "https://youtu.be/_bxBmwr_lQc"
       },
       {
         "language": "Dutch",
