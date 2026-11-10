@@ -74,6 +74,7 @@ OBJECTS = [
         ("German", "", Y + "0Y0oj9YKbiE"),
         ("Chinese", "", Y + "NuyX1e-dAP8"),
         ("Arabic", "", Y + "y2h7PvBWVyY"),
+        ("French", "", Y + "_ALQwtQ1eAw"),
     ]),
     ("tutankhamun-throne", "Throne of Tutankhamun", [
         ("English", "", Y + "x129gs7QkBU"),
@@ -110,6 +111,19 @@ OBJECTS = [
         ("Chinese", "", Y + "wQKVOkApMGU"),
         ("Arabic", "", Y + "YAqyaIcPzGg"),
         ("French", "", Y + "SLpKDpNM1pk"),
+    ]),
+    ("rosetta-stone", "Rosetta Stone", [
+        ("English", "", Y + "h5EFh8TntW0"),
+        ("Spanish", "", Y + "KCuN73gOASw"),
+        ("Arabic", "", Y + "zKEmbYopLI8"),
+        ("Chinese", "", Y + "bUm8pBY0Fzc"),
+        ("Italian", "", Y + "9QvvnRnr3e4"),
+        ("French", "", Y + "hB0Vo4bJKrk"),
+        ("German", "", Y + "LXqtokGUKUI"),
+        ("Dutch", "", Y + "sqYnQXwaG10"),
+        ("Portuguese", "", Y + "eBpqknANW7g"),
+        ("Russian", "", Y + "uvSNBnj2qdY"),
+        ("Armenian", "", Y + "HR8V8ha9Pi8"),
     ]),
     ("directors-tour", "Director’s Highlights Tour", [
         ("English", "", Y + "NC-3L28jKRY"),
@@ -153,12 +167,16 @@ def object_page(slug, title, langs):
             f'aria-label="Watch in {e(label)}">'
             f'<span class="lang__name">{e(lang)}</span>{sub}</a>')
     n = len(langs)
+    # 6 or fewer: the original 3-across grid. 7+: two rows only, at least 4 across,
+    # top row takes the extra one when the count is odd (9 -> 5 + 4).
+    cols = max(4, -(-n // 2))
+    many = f' grid--many" style="--cols:{cols}' if n > 6 else ""
     return head(title, "../") + f"""<body>
 <main class="page">
   <h1 class="title">{e(title)}</h1>
   <p class="subtitle">{SUBTITLE}</p>
   <p class="note">{NOTE}</p>
-  <nav class="grid" data-count="{n}" aria-label="Languages">
+  <nav class="grid{many}" data-count="{n}" aria-label="Languages">
 {chr(10).join(buttons)}
   </nav>
 </main>

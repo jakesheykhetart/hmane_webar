@@ -283,6 +283,11 @@
         "language": "Arabic",
         "region": "",
         "url": "https://youtu.be/y2h7PvBWVyY"
+      },
+      {
+        "language": "French",
+        "region": "",
+        "url": "https://youtu.be/_ALQwtQ1eAw"
       }
     ]
   },
@@ -447,6 +452,67 @@
         "language": "French",
         "region": "",
         "url": "https://youtu.be/SLpKDpNM1pk"
+      }
+    ]
+  },
+  {
+    "slug": "rosetta-stone",
+    "title": "Rosetta Stone",
+    "videos": [
+      {
+        "language": "English",
+        "region": "",
+        "url": "https://youtu.be/h5EFh8TntW0"
+      },
+      {
+        "language": "Spanish",
+        "region": "",
+        "url": "https://youtu.be/KCuN73gOASw"
+      },
+      {
+        "language": "Arabic",
+        "region": "",
+        "url": "https://youtu.be/zKEmbYopLI8"
+      },
+      {
+        "language": "Chinese",
+        "region": "",
+        "url": "https://youtu.be/bUm8pBY0Fzc"
+      },
+      {
+        "language": "Italian",
+        "region": "",
+        "url": "https://youtu.be/9QvvnRnr3e4"
+      },
+      {
+        "language": "French",
+        "region": "",
+        "url": "https://youtu.be/hB0Vo4bJKrk"
+      },
+      {
+        "language": "German",
+        "region": "",
+        "url": "https://youtu.be/LXqtokGUKUI"
+      },
+      {
+        "language": "Dutch",
+        "region": "",
+        "url": "https://youtu.be/sqYnQXwaG10"
+      },
+      {
+        "language": "Portuguese",
+        "region": "",
+        "url": "https://youtu.be/eBpqknANW7g"
+      },
+      {
+        "language": "Russian",
+        "region": "",
+        "url": "https://youtu.be/uvSNBnj2qdY"
+      },
+      {
+        "language": "Armenian",
+        "region": "",
+        "url": "https://youtu.be/HR8V8ha9Pi8"
       }
     ]
   },
