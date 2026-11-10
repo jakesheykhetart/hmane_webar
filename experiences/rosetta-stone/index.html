@@ -292,11 +292,14 @@ const CFG = {
      magnification on both, which is why it is a shared rule. */
   zoomFill: 0.40,
 
-  t: { fadeIn:1.5, hold:2.0, dblExp:1.0, shrink:0.2, fade:0.2,
-       bodyDelay:0.2, btnDelay:1.5, iconDelay:0.2,
-       veilNext:2.0,
-       tourOpen:1.5, tourHold:2.0, tourZoom:1.0, tourZoomHold:2.5, tourRest:1.0, tourClose:1.5,
-       answerHold:1.0, wrongHold:2.0, winHold:1.0, b6Fade:0.25, b6Btn:1.0 },
+  /* Round 2 pacing: transitions and non-reading holds trimmed. Holds that
+     give time to read (veilNext, tourZoomHold, btnDelay) were trimmed least,
+     and every text screen still waits for NEXT. */
+  t: { fadeIn:1.0, hold:1.0, dblExp:0.8, shrink:0.2, fade:0.2,
+       bodyDelay:0.2, btnDelay:1.0, iconDelay:0.2,
+       veilNext:1.0,
+       tourOpen:0.5, tourHold:1.0, tourZoom:0.8, tourZoomHold:2.0, tourRest:0.3, tourClose:0.5,
+       answerHold:0.8, wrongHold:2.0, winHold:0.6, b6Fade:0.25, b6Btn:0.6 },
 
   type: { title:30, body:16, veilBody:18, cap:20, btn:30, b6:30, label:18 },
   px  : { border:5, rule:10, margin:16 },
@@ -307,11 +310,11 @@ const CFG = {
   bandLabels: ['Language I','Language II','Language III'],
 
   copy: {
-    phone : 'Tap a language label from the bank below, then tap the matching script on the Rosetta Stone.',
-    tablet: 'Tap a language label from the bank on the right, then tap the matching script on the Rosetta Stone.',
+    phone : 'Tap a language name below. Then tap the part of the stone written in that script.',
+    tablet: 'Tap a language name on the right. Then tap the part of the stone written in that script.',
     /* PLACEHOLDER — replace with final approved wording. 38 words, which is
        about the ceiling at 18pt before it crowds the NEXT button. */
-    threeScripts: 'The Rosetta Stone carries one decree written three times — in Egyptian hieroglyphic, in Egyptian demotic, and in Greek. Because scholars could already read the Greek, the other two scripts could finally be deciphered.',
+    threeScripts: 'The Rosetta Stone shows one official message, called a decree, written three times: in hieroglyphs, in Demotic, and in Greek. Scholars could already read Greek. That helped them crack the code of the other two.',
     rotatePhone : 'Please hold your phone upright',
     rotateTablet: 'Please hold your tablet sideways'
   }
@@ -1032,14 +1035,16 @@ const CH2 = {
      than that, so anyone genuinely trying was being dropped into the fallback
      mid-lift. 10s is long enough to succeed and short enough not to feel stuck. */
   acquireTimeout: 10.0,
-  fallbackHold: 1.0,
+  fallbackHold: 0.6,
 
-  t: { fadeIn:1.5, hold:2.0, settle:0.5, timeout:3.0,
+  /* Round 2 pacing: fadeIn, hold, cutHold, zoom, zoomHold and slide trimmed.
+     Reading delays (audioIn, nextIn, detHold) unchanged. */
+  t: { fadeIn:1.0, hold:1.0, settle:0.5, timeout:3.0,
        bandFade:0.5, bandHold:1.0, promptFade:0.5,
-       cutHold:1.0, zoom:2.5, zoomHold:1.0,
+       cutHold:0.5, zoom:1.8, zoomHold:0.4,
        detFade:0.25, detHold:1.25,
        veilFade:0.25, titleFade:0.5, bodyGap:0.25, bodyFade:0.5,
-       q7Next:0.75, audioIn:1.0, nextIn:1.0, slide:1.0, step:0.25, quizIn:0.5,
+       q7Next:0.75, audioIn:1.0, nextIn:1.0, slide:0.8, step:0.25, quizIn:0.5,
        hintDelay:2.0, silentHold:4.0 },
   hintPt: 12,
 
@@ -1062,11 +1067,11 @@ const CH2 = {
 
   copy: {
     prompt   : 'Tap the highlighted line',
-    q7       : 'What are phonograms & determinative signs?',
-    t8       : 'Phonogram',
-    b8       : 'This is a cluster of phonograms—symbols that represent sounds rather than objects. Champollion’s breakthrough was recognizing that hieroglyphs represented sounds, not just ideas or objects.',
-    t9       : 'Determinative sign',
-    b9       : 'This is a determinative sign—a symbol that is not pronounced but clarifies the meaning of the word that comes before it.',
+    q7       : 'What are sound signs and sense signs?',
+    t8       : 'Sound signs',
+    b8       : 'These are sound signs. Each one stands for a sound, like a letter. The scholar Champollion cracked the code when he saw that hieroglyphs can stand for sounds, not just ideas.',
+    t9       : 'Sense sign',
+    b9       : 'This is a sense sign. It is not read out loud. Instead, it gives a clue to what the word before it means.',
     t10      : 'What do these hieroglyphs mean?',
     b10      : 'Tap the buttons to guess',
     moveClose: 'Move phone closer',
@@ -1077,7 +1082,7 @@ const CH2 = {
        vocalised rather than ambience or narration. Kept to three words because
        fitOneLine has no floor: "hear these phonograms read aloud" shrank to
        ~10px on an iPhone SE, below the 12pt hint. */
-    audioLabel: 'Hear these phonograms',
+    audioLabel: 'Hear these sound signs',
     silent   : 'No sound? Check the silent switch on the side of your phone.',
     hint     : 'Hint?'
   },

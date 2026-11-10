@@ -79,6 +79,10 @@ for k in range(1,7):
 for s,k in zip(strokes,[6,8,10,12,14,16]):
  for f,p in [(k,s['points'][0]),(k+1,s['points'][-1])]:
   delta=np.array(p)-frames[str(f)]['nib'];frames[str(f)]['stylus']['pivot']=(np.array(frames[str(f)]['stylus']['pivot'])+delta).tolist();frames[str(f)]['nib']=p
+# Round 2: the lid lifts straight up and stops lower than the authored keyframes.
+# 1.38 m keeps its rim ~8 cm above the reed's top when the reed is fully raised (frame 4).
+LID_PEAK_Y=1.38
+for k in range(3,18):frames[str(k)]['lid']['pivot'][1]=LID_PEAK_Y
 pivots={part:((bl[key].min(0)+bl[key].max(0))/2).tolist() for part,key in parts.items()}
 data={'version':1,'coordinateSystem':'glTF meters; Rhino (X,Z,-Y)/1000','parts':meshparts,'pivots':pivots,'baseNib':((bl['LOC STYLUS NIB'].min(0)+bl['LOC STYLUS NIB'].max(0))/2).tolist(),'baseInk':((bl['LOC INKWELL BLACK'].min(0)+bl['LOC INKWELL BLACK'].max(0))/2).tolist(),'frames':frames,'strokes':strokes}
 Path(sys.argv[4]).write_text(json.dumps(data,separators=(',',':')))
