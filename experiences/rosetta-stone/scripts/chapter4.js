@@ -29,7 +29,7 @@ window.Chapter4 = (() => {
   root.innerHTML=`<div id="c4-intro-art" hidden><img alt="Hieroglyphic inscription"></div>
     <section id="c4-stage"><button id="c4-name" class="c4-audio" hidden>♫ &nbsp; HEAR PTOLEMAIS</button>
     <div id="c4-cartouche" hidden><img id="c4-background" alt="Cartouche surrounding the royal name"><div id="c4-signs"></div><div id="c4-slots"></div><button id="c4-reveal-target" hidden aria-label="Uncover the highlighted glyphs"></button><div id="c4-shimmer" hidden></div></div>
-    <p id="c4-direction" hidden>← READ THIS WAY</p><div id="c4-direction-demo" hidden><p>START HERE. READ FROM RIGHT TO LEFT.</p><span aria-hidden="true">←</span></div>
+    <p id="c4-direction" hidden>HIEROGLYPHS READ RIGHT TO LEFT<span aria-hidden="true">←</span></p><div id="c4-direction-demo" hidden><p>START HERE. READ RIGHT TO LEFT.</p><span aria-hidden="true">←</span></div>
     <section id="c4-copy" aria-live="polite"><h1></h1><p></p></section>
     <button id="c4-pronounce" hidden>PTOLEMY &nbsp; ♫</button><div id="c4-bank" hidden></div></section>
     <button id="c4-next" hidden>NEXT</button><button id="c4-replay" class="c4-audio" hidden aria-label="Replay this phrase">♫ &nbsp; HEAR AGAIN</button>

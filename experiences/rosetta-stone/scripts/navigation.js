@@ -43,6 +43,7 @@ window.HMANENav = (()=>{
     const verdict=parseFloat(getComputedStyle(document.querySelector('#answer')).opacity)>.05||document.querySelector('#c3-verdict:not([hidden])');root.style.visibility=verdict?'hidden':'visible';
     const ch=active?3:info.beat>=20?2:1;root.querySelectorAll('[data-chapter]').forEach(b=>b.setAttribute('aria-current',+b.dataset.chapter===ch?'true':'false'));
     if(active)return;
+    if(window.HMANELegacy.viewerOpen?.()){setBack(null);return;} // Round 3: the zoom viewer has its own EXIT ZOOM button
     const map={4:'?beat=2',5:'?beat=4',6:'?beat=5',27:'?beat=6',28:'?ch2=7',29:'?ch2=8',30:'?ch2=9'};
     const stable=info.beat!==30||[...document.querySelectorAll('.c2-btn')].some(b=>+getComputedStyle(b).opacity>.9);
     setBack(stable?map[info.beat]:null,info.beat===28);

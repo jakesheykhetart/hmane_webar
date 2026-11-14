@@ -12,6 +12,31 @@
 
 <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<script>
+/* Round 3: keep the AR stone's front face square to the viewer.
+   Each frame, find the phone (the camera) in the image target's own space and turn the
+   model about its vertical axis toward it. The model's front face is its z = 0 plane and
+   its origin sits on that plane, so the face stays registered on the replica while the
+   outer side walls turn away and the depth shows through the hollow interior instead.
+   max = the largest turn in degrees; ease = how quickly it follows (0-1 per frame). */
+AFRAME.registerComponent('face-viewer', {
+  schema: { max: { default: 30 }, ease: { default: 0.15 } },
+  init() { this.cam = new THREE.Vector3(); this.yaw = 0; },
+  tick() {
+    const camera = this.el.sceneEl.camera, target = this.el.parentEl && this.el.parentEl.object3D;
+    if (!camera || !target || !target.visible) return;
+    camera.getWorldPosition(this.cam);
+    target.updateMatrixWorld();
+    target.worldToLocal(this.cam);
+    const p = this.el.object3D.position, dx = this.cam.x - p.x, dz = this.cam.z - p.z;
+    if (dz <= 0) return;
+    const lim = THREE.MathUtils.degToRad(this.data.max);
+    const want = Math.max(-lim, Math.min(lim, Math.atan2(dx, dz)));
+    this.yaw += (want - this.yaw) * this.data.ease;
+    this.el.object3D.rotation.y = this.yaw;
+  }
+});
+</script>
 
 <style>
   :root{ --navy:#000066; --gold:#ebb563; --grey:#D9DDDC; --green:#63a152; --red:#a32a2a; }
@@ -103,20 +128,52 @@
   #c2-audio{cursor:pointer;}
   #c2-audiolabel{color:var(--gold);text-transform:uppercase;line-height:1.15;cursor:pointer;}
   #c2-silent{color:var(--grey);line-height:1.3;}
-  /* Navy on the image's light plate — see hintAnchor. */
-  #c2-hint{color:var(--navy);text-align:center;cursor:pointer;pointer-events:auto;
-           text-decoration:underline;}
+  /* Round 3: a gold-bordered HINT? button centred under the image, at the same size as
+     Chapter 3's hint (was 12pt navy underlined text inside the image). */
+  #c2-hint{color:var(--gold);background:var(--navy);border:3px solid var(--gold);text-align:center;
+           cursor:pointer;pointer-events:auto;text-transform:uppercase;line-height:1.15;
+           padding:.15em .7em;white-space:nowrap;transform:translateX(-50%);}
   .c2-btn{position:absolute;background:var(--navy);border-style:solid;border-color:var(--gold);
           display:flex;flex-direction:column;align-items:center;justify-content:center;
           color:var(--gold);text-transform:uppercase;cursor:pointer;opacity:0;line-height:1.1;}
   .c2-btn small{display:block;}
 
-  /* Zoom viewer — look only, no gameplay. */
+  /* Zoom viewer — look only, no gameplay.
+     Round 3: opened by a labelled "+ ZOOM" button or by pinching over the stone. Inside,
+     +/− buttons sit lower right and EXIT ZOOM lower left (the chapter Back button is
+     hidden while the viewer is open). Zoom-out stops where the picture still fills the
+     screen, so no black border ever shows. */
   #zoom-btn{position:absolute;z-index:6;opacity:0;pointer-events:none;cursor:pointer;}
   #viewer{position:fixed;inset:0;z-index:10;background:#000;opacity:0;pointer-events:none;
           overflow:hidden;touch-action:none;}
   #viewer img{position:absolute;display:block;transform-origin:0 0;}
-  #viewer-close{position:absolute;z-index:11;cursor:pointer;}
+  #viewer img.eased{transition:transform .22s ease;}
+  .vbtn{font:300 clamp(16px,4.3vw,25px)/1.15 Karla,sans-serif;color:var(--gold);background:var(--navy);
+        border:3px solid var(--gold);padding:.48em .8em;min-height:44px;cursor:pointer;
+        text-transform:uppercase;touch-action:manipulation;}
+  #zoom-btn.vbtn{font-size:clamp(14px,3.6vw,20px);padding:.3em .6em;min-height:0;white-space:nowrap;}
+  #viewer-exit{position:absolute;z-index:11;left:16px;bottom:max(16px,env(safe-area-inset-bottom));}
+  #viewer-zoom{position:absolute;z-index:11;right:16px;bottom:max(16px,env(safe-area-inset-bottom));
+               display:flex;gap:10px;}
+  #viewer-zoom .vbtn{font-size:30px;width:56px;padding:0;line-height:1;}
+  #viewer-tip{position:absolute;z-index:11;left:8%;width:84%;top:max(70px,9%);text-align:center;
+              color:var(--grey);background:rgba(0,0,70,.85);padding:8px 10px;font-size:clamp(14px,3.8vw,19px);
+              pointer-events:none;transition:opacity .4s ease;}
+
+  /* Round 3: the language tour can be pinched while it runs. */
+  #tour-tip{position:fixed;z-index:6;left:50%;transform:translateX(-50%);bottom:max(18px,env(safe-area-inset-bottom));
+            text-align:center;color:var(--grey);opacity:0;pointer-events:none;white-space:nowrap;
+            background:rgba(0,0,70,.85);padding:6px 12px;
+            font-size:clamp(14px,3.8vw,19px);transition:opacity .3s ease;}
+  #still-win.tour{touch-action:none;}
+
+  /* Round 3: when a label is picked, the stone rows light up with the slots. */
+  .stonezone{touch-action:none;transition:background-color .18s ease, box-shadow .18s ease;}
+  .stonezone.lit{background:rgba(217,221,220,.30);box-shadow:inset 0 0 0 3px var(--gold);
+                 animation:zone-pulse 1.1s ease-in-out infinite;}
+  .stonezone.done{background:rgba(99,161,82,.32);box-shadow:inset 0 0 0 3px var(--green);}
+  .slot.lit{animation:zone-pulse 1.1s ease-in-out infinite;}
+  @keyframes zone-pulse{50%{background-color:rgba(217,221,220,.55);}}
 
   #gate{position:fixed;inset:0;z-index:15;background:var(--navy);color:var(--gold);
         display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -134,9 +191,9 @@
   #cal input[type=range]{flex:1;}
   #cal .out{color:var(--gold);}
 </style>
-<link rel="stylesheet" href="./styles/chapter3.css">
-<link rel="stylesheet" href="./styles/chapter4.css">
-<link rel="stylesheet" href="./styles/chapter5.css">
+<link rel="stylesheet" href="./styles/chapter3.css?v=20261114-r3">
+<link rel="stylesheet" href="./styles/chapter4.css?v=20261114-r3">
+<link rel="stylesheet" href="./styles/chapter5.css?v=20261114-r3">
 </head>
 <body>
 
@@ -152,9 +209,12 @@
     <a-entity light="type: ambient; intensity: 0.95"></a-entity>
     <a-entity light="type: directional; intensity: 0.55" position="1 2 1"></a-entity>
     <a-entity mindar-image-target="targetIndex: 0" id="stone-target">
-      <!-- Computed from assets/targets/source-01.jpg and confirmed on device 260809. -->
-      <a-gltf-model id="stone-model" rotation="0 0 0"
-        position="-0.048 -0.204 0" scale="0.316 0.316 0.316" src="#rosetta-model"></a-gltf-model>
+      <!-- Round 3: re-aligned on device with ?cal=1, 261114 (was -0.048 -0.204 0 / 0.316).
+           face-viewer turns the model about its own vertical axis toward the phone, so its
+           front stays square to the viewer and the depth reads through the hollow interior
+           rather than one outer side. -->
+      <a-gltf-model id="stone-model" rotation="0 0 0" face-viewer="max: 30"
+        position="-0.045 -0.280 0" scale="0.315 0.315 0.315" src="#rosetta-model"></a-gltf-model>
     </a-entity>
   </a-scene>
 </div>
@@ -171,7 +231,7 @@
   <div id="title" class="ui-el">Match the Script</div>
   <div id="body" class="ui-el"></div>
   <div id="play" class="ui-el btn">Play!</div>
-  <img id="zoom-btn" src="./assets/images/zoom-icon.png" alt="Zoom">
+  <button id="zoom-btn" class="vbtn" aria-label="Zoom in on the stone">+ Zoom</button>
 </div>
 
 <div id="veil">
@@ -210,7 +270,8 @@
 <!-- Fallback only. Primary playback is Web Audio — see playWedj(). -->
 <audio id="c2-wedj" src="./assets/audio/HMANE_WEDJ_SOUND.m4a" preload="auto" playsinline></audio>
 
-<div id="viewer"><img id="viewer-img" alt=""><img id="viewer-close" src="./assets/images/zoom-icon.png" alt="Close"></div>
+<div id="viewer"><img id="viewer-img" alt=""><div id="viewer-tip"></div><button id="viewer-exit" class="vbtn">Exit zoom</button><div id="viewer-zoom"><button id="viewer-in" class="vbtn" aria-label="Zoom in">+</button><button id="viewer-out" class="vbtn" aria-label="Zoom out">−</button></div></div>
+<div id="tour-tip">Pinch to look closer</div>
 
 <div id="gate">
   <div id="gate-title">The Rosetta Stone</div>
@@ -228,7 +289,7 @@
   <div id="calout" class="out"></div>
 </div>
 
-<script src="./scripts/navigation.js"></script>
+<script src="./scripts/navigation.js?v=20261114-r3"></script>
 <script>
 /* ===================================================================
    HMANE ROSETTA STONE — CHAPTER 1
@@ -284,7 +345,10 @@ const CFG = {
             {x0:936, x1:1618, y0:1199, y1:1503} ]
   },
 
-  phoneWin: { w:0.65, h:0.60 },
+  /* Round 3: the stone window and its slots are taller (was 0.65 x 0.60); the label
+     buttons below are a single smaller row. h is capped so `below` px stay free for
+     the title, the labels and the Back button on short phones. */
+  phoneWin: { w:0.69, h:0.72, below:200 },
   tabletWinFrac: 0.40,
 
   /* Beat 3 zoom: band height fills this fraction of screen height.
@@ -304,7 +368,7 @@ const CFG = {
        tourOpen:0.5, tourHold:1.0, tourZoom:0.8, tourZoomHold:2.0, tourRest:0.3, tourClose:0.5,
        answerHold:0.8, wrongHold:2.0, winHold:0.6, b6Fade:0.25, b6Btn:0.6 },
 
-  type: { title:30, body:16, veilBody:18, cap:20, btn:30, b6:30, label:18 },
+  type: { title:30, body:16, veilBody:18, cap:20, capPhone:15, btn:30, b6:30, label:18 },
   px  : { border:5, rule:10, margin:16 },
   b6  : { blur:12, darken:0.55 },
 
@@ -353,8 +417,10 @@ function stillLayout(mode, bandIndex){
   const W = vw(), H = vh(), tab = isTablet(), c = cfgFor();
   if(mode === 'window'){
     const win = tab ? {x:0,y:0,w:W*CFG.tabletWinFrac,h:H}
-                    : {x:0,y:0,w:W*CFG.phoneWin.w,h:H*CFG.phoneWin.h};
-    return {win, fit:fitCover(win.w, win.h, {w:c.w,h:c.h}, c.src), mode};
+                    : {x:0,y:0,w:W*CFG.phoneWin.w,h:Math.min(H*CFG.phoneWin.h, H-CFG.phoneWin.below)};
+    /* Round 3: on phones the window is cropped around the stone itself (x 249-1207),
+       not the centre of the picture, so the taller window never clips the stone's edges. */
+    return {win, fit:fitCover(win.w, win.h, {w:c.w,h:c.h}, tab ? c.src : {x:249, y:0, w:958, h:c.h}), mode};
   }
   if(mode === 'band'){
     const b = c.bands[bandIndex];
@@ -507,38 +573,141 @@ function layoutVeil(){
 }
 
 /* =================== beat 3 — the language tour =================== */
+/* Round 3: the visitor can pinch (or scroll-wheel on desktop) at any point in the tour.
+   Touching freezes the tour where it is. It carries on when they zoom back out to the
+   tour's own framing, or after 5 s with no movement, easing back to the framing the tour
+   was heading for. Zoom-out is clamped so the picture always fills the screen. */
+const TI = { on:false, engaged:false, i:0, expect:null, L:null, last:0,
+             pointers:new Map(), pinch:null, waiters:[], idle:null };
+async function tourWait(ms){
+  let left = ms;
+  while(left > 0){
+    if(TI.engaged){ await new Promise(r => TI.waiters.push(r)); continue; }
+    const t0 = HMANEClock.now();
+    await wait(Math.min(left, 100));
+    if(!TI.engaged) left -= HMANEClock.now() - t0;
+  }
+}
+function tourStep(L, i, seconds){
+  TI.expect = L; TI.i = i;
+  if(TI.engaged) return;
+  applyStill(L, seconds); setMask(bandRect(L, i), seconds); setBandLabel(i, bandRect(L, i), seconds);
+}
+function tourEngage(){
+  if(TI.engaged) return;
+  TI.engaged = true;
+  $('tour-tip').textContent = 'Zoom back out to continue';
+  const im = $('still-img').getBoundingClientRect(), c = cfgFor(), full = stillLayout('full');
+  const sc = im.width / c.w;
+  TI.L = { win:full.win, mode:'full', fit:{ scale:sc, left:im.left, top:im.top, width:c.w*sc, height:c.h*sc } };
+  tourApply();
+  HMANEClock.clear(TI.idle);
+  const idleCheck = () => {
+    if(!TI.engaged) return;
+    if(TI.pointers.size === 0 && HMANEClock.now() - TI.last > 5000) return tourRelease();
+    TI.idle = HMANEClock.timeout(idleCheck, 250);
+  };
+  TI.idle = HMANEClock.timeout(idleCheck, 250);
+}
+function tourApply(){
+  const f = TI.L.fit, c = cfgFor(), W = vw(), H = vh(), min = stillLayout('full').fit.scale;
+  const ns = Math.min(min*8, Math.max(min, f.scale));
+  if(ns !== f.scale){ const cx = W/2, cy = H/2; f.left = cx - (cx-f.left)*ns/f.scale; f.top = cy - (cy-f.top)*ns/f.scale; f.scale = ns; }
+  f.width = c.w*f.scale; f.height = c.h*f.scale;
+  f.left = Math.min(0, Math.max(W - f.width, f.left));
+  f.top  = Math.min(0, Math.max(H - f.height, f.top));
+  applyStill(TI.L, 0); setMask(bandRect(TI.L, TI.i), 0); setBandLabel(TI.i, bandRect(TI.L, TI.i), 0);
+  TI.last = HMANEClock.now();
+}
+function tourZoomAt(factor, x, y){
+  const f = TI.L.fit, ns = f.scale*factor;
+  f.left = x - (x - f.left)*ns/f.scale; f.top = y - (y - f.top)*ns/f.scale; f.scale = ns;
+  tourApply();
+}
+async function tourRelease(){
+  if(!TI.engaged) return;
+  HMANEClock.clear(TI.idle);
+  TI.pointers.clear(); TI.pinch = null;
+  const z = 0.45, L = TI.expect;
+  applyStill(L, z); setMask(bandRect(L, TI.i), z); setBandLabel(TI.i, bandRect(L, TI.i), z);
+  await wait(z*1000);
+  TI.engaged = false;
+  $('tour-tip').textContent = 'Pinch to look closer';
+  const w = TI.waiters; TI.waiters = []; w.forEach(r => r());
+}
+(function tourGestures(){
+  const el = $('still-win');
+  const live = () => A.beat === 3 && TI.on;
+  el.addEventListener('pointerdown', e => {
+    if(!live()) return;
+    try{ el.setPointerCapture(e.pointerId); }catch{}
+    TI.pointers.set(e.pointerId, {x:e.clientX, y:e.clientY, x0:e.clientX, y0:e.clientY});
+    if(TI.pointers.size >= 2) tourEngage();
+  });
+  el.addEventListener('pointermove', e => {
+    if(!live() || !TI.pointers.has(e.pointerId)) return;
+    const prev = TI.pointers.get(e.pointerId);
+    TI.pointers.set(e.pointerId, {...prev, x:e.clientX, y:e.clientY});
+    const pts = [...TI.pointers.values()];
+    if(pts.length === 1){
+      if(!TI.engaged){ if(Math.hypot(e.clientX-prev.x0, e.clientY-prev.y0) < 10) return; tourEngage(); }
+      TI.L.fit.left += e.clientX - prev.x; TI.L.fit.top += e.clientY - prev.y; tourApply();
+    } else if(pts.length === 2){
+      tourEngage();
+      const d = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+      const mid = {x:(pts[0].x+pts[1].x)/2, y:(pts[0].y+pts[1].y)/2};
+      if(TI.pinch){ TI.L.fit.left += mid.x - TI.pinch.mid.x; TI.L.fit.top += mid.y - TI.pinch.mid.y; tourZoomAt(d/TI.pinch.d, mid.x, mid.y); }
+      TI.pinch = {d, mid};
+    }
+  });
+  const end = e => {
+    TI.pointers.delete(e.pointerId);
+    if(TI.pointers.size < 2) TI.pinch = null;
+    /* Zoomed back out to (or past) the tour's own framing: let it carry on. */
+    if(TI.engaged && TI.pointers.size === 0 && TI.L.fit.scale <= TI.expect.fit.scale*1.02) tourRelease();
+  };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  el.addEventListener('wheel', e => {
+    if(!live()) return; e.preventDefault();
+    tourEngage(); tourZoomAt(Math.exp(-e.deltaY*0.002), e.clientX, e.clientY);
+    if(TI.L.fit.scale <= TI.expect.fit.scale*1.02 && e.deltaY > 0) tourRelease();
+  }, {passive:false});
+})();
+
 async function beat3(){
   A.beat = 3;
+  TI.on = true; TI.engaged = false; TI.waiters = [];
+  $('still-win').classList.add('tour');
   applyStill(stillLayout('full'), 0);
+  TI.expect = stillLayout('full');
   $('mask').style.transition = `opacity ${CFG.t.fade}s ease`;
-  await wait(CFG.t.tourOpen*1000);
+  $('tour-tip').style.opacity = 1;
+  await tourWait(CFG.t.tourOpen*1000);
 
   for(let i=0; i<3; i++){
     const full = stillLayout('full');
     const zoom = stillLayout('band', i);
 
     /* highlight, at full-screen framing */
-    setMask(bandRect(full, i), 0);
-    setBandLabel(i, bandRect(full, i), 0);
+    tourStep(full, i, 0);
     $('mask').style.opacity = 1;
     $('band-label').style.transition = `opacity ${CFG.t.fade}s ease`;
     $('band-label').style.opacity = 1;
-    await wait(CFG.t.tourHold*1000);
+    await tourWait(CFG.t.tourHold*1000);
 
     /* zoom in — image, mask and label all transition together so they stay locked */
     const z = CFG.t.tourZoom;
-    applyStill(zoom, z);
-    setMask(bandRect(zoom, i), z);
-    setBandLabel(i, bandRect(zoom, i), z);
-    await wait(z*1000 + CFG.t.tourZoomHold*1000);
+    tourStep(zoom, i, z);
+    await tourWait(z*1000 + CFG.t.tourZoomHold*1000);
 
     /* zoom out */
-    applyStill(full, z);
-    setMask(bandRect(full, i), z);
-    setBandLabel(i, bandRect(full, i), z);
-    await wait(z*1000 + CFG.t.tourRest*1000);
+    tourStep(full, i, z);
+    await tourWait(z*1000 + CFG.t.tourRest*1000);
   }
 
+  TI.on = false;
+  $('still-win').classList.remove('tour');
+  $('tour-tip').style.opacity = 0;
   $('mask').style.opacity = 0;
   $('band-label').style.opacity = 0;
   await wait(CFG.t.tourClose*1000);
@@ -576,7 +745,7 @@ function layoutBeat4(){
   if(!tab){
     const availW = W - 2*m;
     t.style.left = m+'px'; t.style.width = availW+'px'; t.style.textAlign='left';
-    t.style.top = (L.win.h + S(CFG.px.border) + 0.04*H)+'px';
+    t.style.top = (L.win.h + S(CFG.px.border) + 0.025*H)+'px';
     fitOneLine(t, availW, CFG.type.title);
     const tH = t.getBoundingClientRect().height || S(CFG.type.title);
     b.style.left = m+'px'; b.style.width = availW+'px'; b.style.textAlign='left';
@@ -620,49 +789,91 @@ function styleButton(el, label){
 
 /* =================== zoom button + viewer =================== */
 function showZoomButton(){
-  const L = A.layout, z = $('zoom-btn');
-  const size = L.win.w * 0.08, inset = S(CFG.px.margin);
-  z.style.width = size+'px'; z.style.height = size+'px';
-  z.style.left = (L.win.x + L.win.w - size - inset - S(CFG.px.border))+'px';
-  z.style.top  = (L.win.y + L.win.h - size - inset - S(CFG.px.border))+'px';
+  const L = A.layout, z = $('zoom-btn'), inset = S(10);
+  z.style.right = 'auto'; z.style.bottom = 'auto';
   z.style.transition = `opacity ${CFG.t.fade}s ease`;
   z.style.opacity = 1; z.style.pointerEvents = 'auto';
-  z.onclick = openViewer;
+  const r = z.getBoundingClientRect();
+  z.style.left = (L.win.x + L.win.w - r.width - inset - S(CFG.px.border))+'px';
+  z.style.top  = (L.win.y + L.win.h - r.height - inset - (isTablet()?0:S(CFG.px.border)))+'px';
+  z.onclick = () => openViewer();
 }
+/* Round 3: pinching over the stone window (or ctrl/trackpad-pinch on desktop) also opens
+   the viewer. A two-finger touch never counts as an answer tap. */
+(function stonePinch(){
+  const pts = new Map();
+  const inWin = e => { const L = A.layout; return L && e.clientX >= L.win.x && e.clientX <= L.win.x+L.win.w && e.clientY >= L.win.y && e.clientY <= L.win.y+L.win.h; };
+  const armed = () => (A.beat === 4 || A.beat === 5) && !V.open && !A.busy;
+  document.addEventListener('pointerdown', e => {
+    if(!armed() || !inWin(e)) return;
+    pts.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if(pts.size >= 2){
+      A.gestureUntil = HMANEClock.now() + 600;
+      const p = [...pts.values()];
+      pts.clear();
+      openViewer({x:(p[0].x+p[1].x)/2, y:(p[0].y+p[1].y)/2});
+    }
+  }, true);
+  const drop = e => pts.delete(e.pointerId);
+  document.addEventListener('pointerup', drop, true); document.addEventListener('pointercancel', drop, true);
+  document.addEventListener('wheel', e => { if(e.ctrlKey && armed() && inWin(e)){ e.preventDefault(); openViewer({x:e.clientX, y:e.clientY}); } }, {passive:false});
+})();
 
 /* Look-only viewer. No answers register while it is open. */
 const V = { open:false, s:1, x:0, y:0, pointers:new Map(), pinch:null };
-function openViewer(){
+/* Smallest zoom: the picture still covers the whole screen. */
+const viewerMin = () => { const c = cfgFor(); return Math.max(vw()/c.w, vh()/c.h); };
+function openViewer(at){
   const c = cfgFor(), v = $('viewer'), im = $('viewer-img');
   im.src = $('still-img').src;
-  /* Open at the same magnification beat 3 used, centred on the stone. */
+  disarm();
+  /* Open at the same magnification beat 3 used. From the button: centred on the stone.
+     From a pinch: centred on the part of the stone under the fingers. */
   const b = c.bands[1];
-  V.s = (CFG.zoomFill * vh()) / (b.y1 - b.y0);
-  V.x = vw()/2 - ((b.x0+b.x1)/2) * V.s;
-  V.y = vh()/2 - ((b.y0+b.y1)/2) * V.s;
+  V.s = Math.max(viewerMin(), (CFG.zoomFill * vh()) / (b.y1 - b.y0));
+  let px = (b.x0+b.x1)/2, py = (b.y0+b.y1)/2;
+  if(at && A.layout){ const L = A.layout; px = (at.x - L.win.x - L.fit.left)/L.fit.scale; py = (at.y - L.win.y - L.fit.top)/L.fit.scale; }
+  V.x = vw()/2 - px * V.s;
+  V.y = vh()/2 - py * V.s;
   im.style.width = c.w+'px'; im.style.height = c.h+'px';
+  im.classList.remove('eased');
   applyViewer();
-  const cs = S(28), m = S(CFG.px.margin);
-  const cl = $('viewer-close');
-  cl.style.width = cs+'px'; cl.style.height = cs+'px';
-  cl.style.right = m+'px'; cl.style.top = m+'px';
-  cl.onclick = closeViewer;
+  $('viewer-exit').onclick = closeViewer;
+  $('viewer-in').onclick  = () => viewerZoom(1.5);
+  $('viewer-out').onclick = () => viewerZoom(1/1.5);
+  const tip = $('viewer-tip');
+  tip.textContent = 'Pinch or tap + / − to zoom. Drag to look around.';
+  tip.style.opacity = 1;
+  HMANEClock.timeout(() => { tip.style.opacity = 0; }, 3500);
   v.style.transition = `opacity ${CFG.t.fade}s ease`;
   v.style.opacity = 1; v.style.pointerEvents = 'auto';
   V.open = true;
+  HMANENav.setBack(null);
 }
 function closeViewer(){
   const v = $('viewer');
   v.style.opacity = 0; v.style.pointerEvents = 'none';
   V.open = false; V.pointers.clear(); V.pinch = null;
 }
+function viewerZoom(f, cx=vw()/2, cy=vh()/2){
+  const ns = Math.min(viewerMin()*12, Math.max(viewerMin(), V.s*f));
+  V.x = cx - (cx - V.x) * (ns / V.s);
+  V.y = cy - (cy - V.y) * (ns / V.s);
+  V.s = ns;
+  const im = $('viewer-img'); im.classList.add('eased'); applyViewer();
+  HMANEClock.timeout(() => im.classList.remove('eased'), 240);
+}
 function applyViewer(){
+  const c = cfgFor();
+  V.s = Math.max(viewerMin(), V.s);
+  V.x = Math.min(0, Math.max(vw() - c.w*V.s, V.x));
+  V.y = Math.min(0, Math.max(vh() - c.h*V.s, V.y));
   $('viewer-img').style.transform = `translate(${V.x}px,${V.y}px) scale(${V.s})`;
 }
 (function viewerGestures(){
   const v = $('viewer');
   v.addEventListener('pointerdown', e => {
-    if(e.target.id === 'viewer-close') return;
+    if(e.target.closest('button')) return;
     v.setPointerCapture(e.pointerId);
     V.pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
   });
@@ -678,7 +889,7 @@ function applyViewer(){
       const mid = {x:(pts[0].x+pts[1].x)/2, y:(pts[0].y+pts[1].y)/2};
       if(V.pinch){
         const f = d / V.pinch.d;
-        const ns = Math.min(6, Math.max(0.2, V.s * f));
+        const ns = Math.min(viewerMin()*12, Math.max(viewerMin(), V.s * f));
         /* keep the pinch midpoint anchored */
         V.x = mid.x - (mid.x - V.x) * (ns / V.s);
         V.y = mid.y - (mid.y - V.y) * (ns / V.s);
@@ -691,6 +902,9 @@ function applyViewer(){
   const end = e => { V.pointers.delete(e.pointerId); if(V.pointers.size < 2) V.pinch = null; };
   v.addEventListener('pointerup', end);
   v.addEventListener('pointercancel', end);
+  v.addEventListener('wheel', e => { if(!V.open) return; e.preventDefault();
+    const f = Math.exp(-e.deltaY*0.002), ns = Math.min(viewerMin()*12, Math.max(viewerMin(), V.s*f));
+    V.x = e.clientX - (e.clientX - V.x)*(ns/V.s); V.y = e.clientY - (e.clientY - V.y)*(ns/V.s); V.s = ns; applyViewer(); }, {passive:false});
 })();
 
 /* =================== beat 5 — the puzzle =================== */
@@ -767,9 +981,40 @@ function capMetrics(){
   return {w, h:w/5, gap:w/10, fs};
 }
 
+/* Round 3, phone: the three labels sit in one row under the title, each as wide as its
+   own word, so the stone and slots can take more of the screen. */
+function buildBankRow(){
+  const fs = S(CFG.type.capPhone), W = vw(), m = S(CFG.px.margin), bd = S(3);
+  const ctx = document.createElement('canvas').getContext('2d');
+  ctx.font = `300 ${fs}px Karla, sans-serif`;
+  const padX = fs*0.8, h = fs*2.1;
+  let widths = CFG.labels.map(l => ctx.measureText(l).width + 2*padX + 2*bd);
+  let gap = S(10);
+  const total = () => widths.reduce((a,b)=>a+b,0) + gap*(widths.length-1);
+  if(total() > W - 2*m){ const f = (W - 2*m - gap*2)/(total() - gap*2); widths = widths.map(w=>w*f); }
+  const tH = $('title').getBoundingClientRect().height || S(CFG.type.title);
+  const y = parseFloat($('title').style.top) + tH + 0.022*vh();
+  let x = m;
+  CFG.labels.forEach((label,i)=>{
+    const el=document.createElement('div');
+    el.className='cap'; el.textContent=label; el.dataset.label=label;
+    Object.assign(el.style,{left:x+'px', top:y+'px', width:widths[i]+'px', height:h+'px',
+      borderWidth:bd+'px', borderRadius:(h/2)+'px', fontSize:fs+'px', opacity:0, pointerEvents:'auto'});
+    el.dataset.homeLeft = x; el.dataset.homeTop = y;
+    el.addEventListener('pointerup', ()=>{
+      if(A.busy || A.locked.has(label)) return;
+      if(A.armed === el) disarm();
+      else { disarm(); A.armed = el; el.classList.add('armed'); armSlots(true); }
+    });
+    $('ui').appendChild(el); A.caps[label]=el;
+    x += widths[i] + gap;
+  });
+}
+
 function buildBank(){
   const M = capMetrics(), tab = isTablet(), L = A.layout, W = vw(), H = vh();
   Object.values(A.caps).forEach(el=>el.remove()); A.caps={};
+  if(!tab) return buildBankRow();
   const {uiW} = slotGeom();
   const bankX = tab ? L.win.w + uiW/2 + (uiW/2 - M.w)/2 : S(CFG.px.margin);
   const tH = $('title').getBoundingClientRect().height || S(CFG.type.title);
@@ -792,13 +1037,19 @@ function buildBank(){
 }
 
 function disarm(){ if(A.armed){ A.armed.classList.remove('armed'); A.armed=null; } armSlots(false); }
+/* Round 3: the open slots AND the matching rows on the stone light up together. */
 function armSlots(on){
   A.slotEls.forEach((s,i)=>{ if(A.placed[i]!==undefined) return;
-    s.style.background = on ? 'var(--grey)' : 'transparent'; });
+    s.style.background = on ? 'var(--grey)' : 'transparent';
+    s.classList.toggle('lit', on); });
+  document.querySelectorAll('.stonezone').forEach(z=>{
+    const i = +z.dataset.index;
+    z.classList.toggle('lit', on && A.placed[i]===undefined); });
 }
 
 async function tryPlace(i){
   if(A.busy || !A.armed || A.placed[i]!==undefined) return;
+  if(A.gestureUntil && HMANEClock.now() < A.gestureUntil) return;
   A.busy = true;
   const el = A.armed, label = el.dataset.label;
   disarm();
@@ -811,12 +1062,17 @@ async function tryPlace(i){
   if(correct){
     A.placed[i]=label; A.locked.add(label);
     slot.style.background='var(--green)';
+    document.querySelectorAll(`.stonezone[data-index="${i}"]`).forEach(z=>z.classList.add('done'));
     Audio_.ding();
-    const sr = slot.getBoundingClientRect(), M = capMetrics();
+    const sr = slot.getBoundingClientRect();
+    /* A label wider than its slot shrinks to fit inside it. */
+    if(el.offsetWidth > sr.width - 8){ const f = (sr.width - 8)/el.offsetWidth;
+      el.style.width = (el.offsetWidth*f)+'px'; el.style.fontSize = (parseFloat(el.style.fontSize)*f)+'px'; }
+    const cw = el.offsetWidth, ch = el.offsetHeight;
     el.classList.add('placed');
     el.style.transition='left .18s ease, top .18s ease';
-    el.style.left=(sr.left+(sr.width-M.w)/2)+'px';
-    el.style.top =(sr.top +(sr.height-M.h)/2)+'px';
+    el.style.left=(sr.left+(sr.width-cw)/2)+'px';
+    el.style.top =(sr.top +(sr.height-ch)/2)+'px';
     A.busy = false;
     if(Object.keys(A.placed).length===3) HMANEClock.timeout(beat6, CFG.t.winHold*1000);
   } else {
@@ -1845,14 +2101,19 @@ function buildQuiz(hl, contentBottom){
   const bd = S(CFG.px.border), padX = S(14), padY = S(8);
   const nextW = measureText('NEXT', S(CFG.type.btn)) + 2*padX + 2*bd;
   const bw = 1.34 * nextW;
-  const bh = (S(CFG.type.btn) + 2*padY + 2*bd) * 1.34;
+  let bh = (S(CFG.type.btn) + 2*padY + 2*bd) * 1.34;
   const cols = tab ? 4 : 2, rows = tab ? 1 : 2;
   const gapX = tab ? (W - 2*m - cols*bw)/(cols-1) : (hl.w - 2*bw);
   const gridW = tab ? (W - 2*m) : hl.w;
   const gridX = tab ? m : hl.x;
-  const gapY = S(24);
-  const gridH = rows*bh + (rows-1)*gapY;
-  const top = contentBottom + (H - contentBottom - gridH)/2;
+  let gapY = S(24);
+  /* Round 3: keep the grid clear of the lower-left Back button (16px inset, 44px tall),
+     and shrink it a little on short screens rather than overlap. */
+  const reserve = 16 + 48 + 12;
+  const avail = H - reserve - contentBottom;
+  let gridH = rows*bh + (rows-1)*gapY;
+  if(gridH > avail - 16){ const f = Math.max(0.6, (avail - 16)/gridH); bh *= f; gapY *= f; gridH = rows*bh + (rows-1)*gapY; }
+  const top = contentBottom + (avail - gridH)/2;
 
   C2.buttons.forEach(e=>e.remove()); C2.buttons = [];
   CH2.quiz.forEach((q,i)=>{
@@ -1894,11 +2155,16 @@ function showHint(){
   const el = $('c2-hint'), st = C2.stage, Z = CH2.zoomed, an = CH2.hintAnchor;
   const sx = st.w/Z.w, sy = st.h/Z.h;
   el.textContent = CH2.copy.hint;
-  el.style.fontSize = S(CH2.hintPt)+'px';
-  const bw = an.w*sx, lh = S(CH2.hintPt)*1.25;
-  el.style.width = bw+'px';
-  el.style.left = (st.x + an.cx*sx - bw/2)+'px';
-  el.style.top = (st.y + an.y*sy - lh/2)+'px';
+  /* Round 3: centred under the image, in the gap above the question. Same size rule as
+     Chapter 3's hint: clamp(16px, 5vw, 28px). */
+  const fs = Math.min(28, Math.max(16, vw()*0.05));
+  el.style.fontSize = fs+'px';
+  el.style.width = 'auto';
+  const imgBottom = st.y + st.h + vw()*CH2.borderFrac;
+  const titleTop = parseFloat($('c2-title').style.top) || (imgBottom + 0.10*vh());
+  const hh = fs*1.15 + fs*0.3 + 6;
+  el.style.left = (st.x + st.w/2)+'px';
+  el.style.top = (imgBottom + Math.max(4, (titleTop - imgBottom - hh)/2))+'px';
   el.style.pointerEvents = 'auto';
   el.onclick = () => {
     C2.hintOpen = true;
@@ -1987,13 +2253,13 @@ if(SKIP2){
 }
 
 /* Read-only bridge to the existing chapters; chapter selection/back restarts a clean document. */
-window.HMANELegacy={state:()=>({beat:A.beat}),lastStage:()=>C2.stage,
+window.HMANELegacy={state:()=>({beat:A.beat}),viewerOpen:()=>V.open,lastStage:()=>C2.stage,
   projectTarget, // Shared calibrated target-to-screen projection for Chapters 2 and 5.
   retire(){beat1Started=true;try{document.querySelector('a-scene').systems['mindar-image-system'].pause();}catch{}document.querySelectorAll('.mindar-ui-overlay').forEach(e=>e.style.display='none');['ar-wrap','c2-acquire'].forEach(id=>$(id).style.display='none');A.beat=31;}};
 window.addEventListener('load',()=>{const q=new URLSearchParams(location.search);if(q.has('ch3'))Chapter3.start(Math.max(1,Math.min(16,+q.get('ch3')||1)));});
 </script>
-<script src="./scripts/chapter3.js"></script>
-<script src="./scripts/chapter4.js"></script>
-<script src="./scripts/chapter5.js?v=20260928-ar-ready"></script>
+<script src="./scripts/chapter3.js?v=20261114-r3"></script>
+<script src="./scripts/chapter4.js?v=20261114-r3"></script>
+<script src="./scripts/chapter5.js?v=20261114-r3"></script>
 </body>
 </html>

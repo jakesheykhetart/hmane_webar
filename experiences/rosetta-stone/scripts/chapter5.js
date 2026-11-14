@@ -110,12 +110,14 @@ window.Chapter5 = (() => {
   function placeStoneLabels(){const host=E('stone-labels');host.hidden=beat!==16||zoom>1.01;if(host.hidden)return;[...host.children].forEach((el,i)=>{const hb=highlightBox(data.regions[S.topic][i],false),x=hb.x+hb.w/2,y=hb.y+hb.h+6;const width=Math.min(root.clientWidth-24,S.topic==='scripts'?270:220);el.style.width=width+'px';el.style.left=clamp(x-width/2,12,root.clientWidth-width-12)+'px';el.style.top=y+'px';});}
   function topic(key){S.topic=key;E('topic').hidden=true;E('stone-labels').replaceChildren(...labels.map((_,i)=>{const p=document.createElement('p');p.textContent=regionLabel(key,i);return p;}));placeStoneLabels();}
   async function overview(index=0){setBeat(16);lastCheckpoint=16;resetZoom();S.mode='stone';S.groups=[topics[index]];S.pulse=null;topic(topics[index]);E('zoom-controls').hidden=false;E('status').textContent='Pinch or use + to zoom. Drag to explore.';draw();button('NEXT',()=>index<2?overview(index+1):acquire());const previous=()=>index>0?overview(index-1):start(14);E('back').hidden=false;E('back').onclick=()=>run(previous);HMANENav.setBack(null);}
-  function stopCamera(){arSession++;K.clear(arTickID);arTickID=null;arLive=false;found=false;root.classList.remove('c5-live');document.getElementById('ar-wrap').style.display='none';document.getElementById('ar-wrap').style.zIndex='';try{arSystem?.stop();}catch{}document.querySelectorAll('.mindar-ui-overlay').forEach(e=>e.style.display='none');}
+  function stopCamera(){arSession++;K.clear(arTickID);arTickID=null;arLive=false;found=false;root.classList.remove('c5-live');document.getElementById('ar-wrap').style.display='none';document.getElementById('ar-wrap').style.zIndex='';try{const v=arSystem?.video;if(arSystem?.controller&&v?.srcObject)arSystem.stop();else if(v?.srcObject)v.srcObject.getTracks().forEach(t=>t.stop());else if(v)v.addEventListener('loadedmetadata',()=>{if(arSystem.video===v){try{arSystem.stop();}catch{v.srcObject?.getTracks().forEach(t=>t.stop());}}},{once:true});}catch{}document.querySelectorAll('.mindar-ui-overlay').forEach(e=>e.style.display='none');}
   async function acquire(){resetZoom();setBeat(17);lastCheckpoint=17;S.mode='stone';S.groups=[];S.guide=true;E('topic').hidden=true;E('status').textContent='Point your camera at the stone. Line it up with the outline.';E('skip').hidden=false;E('skip').onclick=()=>fallback('Continuing on the image.');draw();const token=++arSession;let trackerReady=false,idleSince=null;found=false;foundAt=0;E('status').textContent='Starting camera… Allow camera access when prompted.';
     const scene=document.querySelector('a-scene'),target=document.getElementById('stone-target');arSystem=scene.systems?.['mindar-image-system'];if(!arSystem){fallback('Camera unavailable. Continuing on the image.');return;}
     document.getElementById('stone-model').object3D.visible=false;
     target.addEventListener('targetFound',onFound);target.addEventListener('targetLost',onLost);scene.addEventListener('arError',onError);const wrap=document.getElementById('ar-wrap');wrap.style.display='block';wrap.style.zIndex='16';
-    function acquireTick(){if(!active||token!==arSession)return;const now=K.now();const video=scene.querySelector('video')||wrap.querySelector('video');if(video?.readyState>=2&&!arLive){arLive=true;root.classList.add('c5-live');S.mode='ar';arSystem._resize?.();E('status').textContent='Preparing stone recognition…';}
+    // Round 3: watch the video this start() creates (not a stale one left over from
+    // Chapters 1-2), and only resize once mind-ar has built its controller.
+    function acquireTick(){if(!active||token!==arSession)return;const now=K.now();const video=arSystem.video;if(video?.srcObject&&video.readyState>=2&&!arLive){arLive=true;root.classList.add('c5-live');S.mode='ar';if(arSystem.controller)arSystem._resize?.();E('status').textContent='Preparing stone recognition…';}
       // Permission and cold tracker initialization are not visitor inactivity.
       // Give the visitor a full ten seconds once both video and tracking are ready.
       if(arLive&&trackerReady){if(idleSince===null){idleSince=now;E('status').textContent='Point your camera at the stone. Line it up with the outline.';}if(found)idleSince=now;else if(now-idleSince>=10000){fallback('Continuing on the image.');return;}}
@@ -123,7 +125,17 @@ window.Chapter5 = (() => {
       draw();arTickID=K.frame(acquireTick);
     }
     arTickID=K.frame(acquireTick);
-    try{await arSystem.start();if(token!==arSession){if(!active||!arLive)arSystem.stop();return;}trackerReady=true;arSystem._resize?.();document.querySelectorAll('.mindar-ui-overlay').forEach(e=>e.style.display='none');}catch(e){if(token===arSession)fallback('Camera unavailable. Continuing on the image.');}
+    // Round 3 fix: mind-ar's start() is not async. It returns before the camera
+    // permission prompt is even answered, so the old `await start()` marked the tracker
+    // ready at once and then called _resize() with no controller yet. That threw, and the
+    // catch sent the visitor straight to the photo. Now the tracker counts as ready only
+    // when mind-ar emits arReady (camera granted, targets loaded), and the ten-second
+    // fallback clock starts from there.
+    const onReady=()=>{if(token!==arSession)return;trackerReady=true;try{arSystem._resize();}catch{}document.querySelectorAll('.mindar-ui-overlay').forEach(e=>e.style.display='none');};
+    scene.addEventListener('arReady',onReady,{once:true});
+    // A session left running by Chapters 1-2 in this page holds the camera; release it first.
+    try{if(arSystem.video?.srcObject)arSystem.stop();}catch{}
+    try{arSystem.start();}catch(e){if(token===arSession)fallback('Camera unavailable. Continuing on the image.');}
   }
   function onFound(){if(!active||beat!==17)return;found=true;lostAt=0;}
   function onLost(){found=false;foundAt=0;if(arLive)lostAt=K.now();}

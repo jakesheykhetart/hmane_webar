@@ -7,7 +7,11 @@ window.Chapter3 = (()=>{
   const E=id=>document.getElementById('c3-'+id), picture=E('art'),frame=E('frame'),movie=E('movie');
   const art={sacred:'sacred-hieroglyph.jpg',stela:'stela-zoomed.jpg',line:'hieroglyphic-line.jpg',isolated:'writing-hieroglyph-isolated.png',final:'glyph-to-3d-final-frame.png'};
   const dimensions={sacred:[1708,1317],stela:[960,520],line:[4000,189],isolated:[1019,1543],final:[1149,1368]};
-  const regions={writing:[982,112,1702,1198],god:[569,438,983,1164],word:[261,448,532,1164],sacred:[13,131,1002,1214],full:[13,112,1702,1214]};
+  // Round 3 (Peter, 2026-09-08): "words of the god" = flagstaff + teardrop + three plural
+  // strokes. The water sign above them means "of" and must stay out, so `word` and
+  // `sacredSigns` are lists of boxes cut out of the mask together. `sacred` stays a single
+  // box because the hint centres its label under it.
+  const regions={writing:[982,112,1702,1198],god:[569,455,983,1164],word:[[13,190,195,1080],[261,455,532,1164]],sacredSigns:[[13,190,195,1080],[205,455,975,1164]],sacred:[13,131,1002,1214],full:[13,112,1702,1214]};
   // Source references are a 4000×148 crop of the runtime line, offset down by 20 px.
   const lineInitial=[3193,20,4000,168],linePassage=[2861,20,3621,168],lineSacred=[2984,25,3588,168];
   let active=false,beat=0,token=0,rect=null,kind='stela',engine=null,loading=null,motionCleanup=()=>{},audioSource=null,askedAudio=false;
@@ -22,7 +26,16 @@ window.Chapter3 = (()=>{
   function setRect(r){rect={...r};bounds(frame,r);}
   async function moveRect(to,ms){const from={...rect};await tween(ms,t=>{const q=ease(t);setRect(Object.fromEntries(Object.keys(from).map(k=>[k,mix(from[k],to[k],q)])));});}
   function plateRegion(box,r=rect){const [iw,ih]=dimensions[kind];return{x:r.x+box[0]/iw*r.w,y:r.y+box[1]/ih*r.h,w:(box[2]-box[0])/iw*r.w,h:(box[3]-box[1])/ih*r.h};}
-  function mask(hole){const e=E('mask');e.hidden=false;e.style.opacity=1;const r=hole||{x:0,y:0,w:0,h:0};const x=Math.max(0,r.x),y=Math.max(0,r.y),right=Math.min(W(),r.x+r.w),bottom=Math.min(H(),r.y+r.h);const regions=[{x:0,y:0,w:W(),h:y},{x:0,y:bottom,w:W(),h:H()-bottom},{x:0,y,w:x,h:Math.max(0,bottom-y)},{x:right,y,w:W()-right,h:Math.max(0,bottom-y)}];[...e.children].forEach((p,i)=>bounds(p,regions[i]));}
+  // Round 3: the mask takes one hole or a list of holes. The screen is cut into a grid
+  // on every hole edge and the cells outside all holes are merged row by row into panels.
+  function mask(hole){const e=E('mask');e.hidden=false;e.style.opacity=1;const Wd=W(),Hd=H();
+    const holes=(Array.isArray(hole)?hole:[hole||{x:0,y:0,w:0,h:0}]).map(r=>({x0:Math.max(0,r.x),y0:Math.max(0,r.y),x1:Math.min(Wd,r.x+r.w),y1:Math.min(Hd,r.y+r.h)})).filter(r=>r.x1>r.x0&&r.y1>r.y0);
+    const cuts=(a,b)=>[...new Set([0,b,...holes.flatMap(a)])].sort((m,n)=>m-n);const xs=cuts(h=>[h.x0,h.x1],Wd),ys=cuts(h=>[h.y0,h.y1],Hd);
+    const inside=(x,y)=>holes.some(h=>x>h.x0&&x<h.x1&&y>h.y0&&y<h.y1),panels=[];
+    for(let j=0;j<ys.length-1;j++){let run=null;for(let i=0;i<xs.length-1;i++){const open=!inside((xs[i]+xs[i+1])/2,(ys[j]+ys[j+1])/2);if(open){if(run)run.w=xs[i+1]-run.x;else run={x:xs[i],y:ys[j],w:xs[i+1]-xs[i],h:ys[j+1]-ys[j]};}else if(run){panels.push(run);run=null;}}if(run)panels.push(run);}
+    while(e.children.length<panels.length)e.append(document.createElement('div'));
+    [...e.children].forEach((p,i)=>{if(i<panels.length){p.hidden=false;bounds(p,panels[i]);}else p.hidden=true;});}
+  const holesFor=box=>Array.isArray(box[0])?box.map(b=>plateRegion(b)):plateRegion(box);
   function reset(){answering=false;delete root.dataset.phase;token++;K.cancel();motionCleanup();motionCleanup=()=>{};stopAudio();movie.pause();movie.onended=null;movie.onerror=null;E('three').hidden=true;E('second').hidden=true;E('second').style.opacity=1;movie.hidden=true;frame.hidden=false;E('copy').style.cssText='';E('copy').hidden=false;E('title').textContent='';E('body').textContent='';E('title').style.opacity=1;E('title').style.color='';E('title').style.fontSize='';E('return-bg').hidden=true;E('body').style.opacity=1;E('mask').hidden=true;for(const id of ['next','audio','notice','replay','hint','sacred-hint','writing-hint','tap','motion','choices','instruction','verdict']){E(id).hidden=true;E(id).onclick=null;E(id).style.opacity=1;}E('choices').replaceChildren();HMANENav.setBack(null);root.style.background='#000066';}
   async function ready(){if(loading)return loading;loading=(async()=>{await Promise.all(Object.entries(art).map(([key,name])=>new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>{cache[key]=i;resolve();};i.onerror=()=>reject(new Error('Could not load '+name));i.src=imgPath+name;})));const response=await fetch('./assets/data/scribal-animation.json');if(!response.ok)throw Error('Animation data failed to load');data=await response.json();})();try{await loading;}catch(e){loading=null;throw e;}}
   function error(e){console.error(e);E('copy').hidden=false;E('title').textContent='Unable to load this step';E('body').textContent='Please retry. Your place in the chapter is saved.';mask();E('next').textContent='Retry';E('next').hidden=false;E('next').onclick=()=>go(beat);HMANENav.setBack(()=>go(7));}
@@ -80,12 +93,12 @@ window.Chapter3 = (()=>{
     },
     async 12(){setArt('sacred',fit('sacred',.5,.72));await moveRect(fit('sacred',.375,.35),800);await sleep(300);go(13);},
     async 13(){await reading('god','DIVINE','This sign means “divine,” or godly.',14,7);E('replay').hidden=false;E('replay').onclick=()=>go(8);},
-    async 14(){await reading('word','WORDS','This sign means “words.”',15,13);},
-    async 15(){await reading('sacred','SACRED','Together, these signs mean “sacred,” or holy.',16,14);},
+    async 14(){await reading('word','WORDS','These signs mean “words.” The three strokes make it plural.',15,13);},
+    async 15(){await reading('sacredSigns','SACRED','Together, these signs mean “words of the god”: sacred writing.',16,14);},
     async 16(){const r=fit('sacred',.5,.30);r.y=Math.max(5,W()*.012);setArt('sacred',r);mask(plateRegion(regions.full));await sleep(500);copy('WHICH SCRIPT DO THESE SIGNS REFER TO?','',r.y+r.h+Math.max(54,H()*.04));await fade(E('title'),true,500);back(15);await sleep(500);E('instruction').hidden=false;E('instruction').style.opacity=0;const choices=E('choices');choices.hidden=false;for(const label of ['HIEROGLYPHIC','DEMOTIC','GREEK']){const b=document.createElement('button');b.textContent=label;b.onclick=()=>answer(label==='HIEROGLYPHIC');choices.append(b);}await fade(choices,true,500);await fade(E('instruction'),true,500);await sleep(1000);hint();}
   };
-  async function reading(region,title,body,to,prev){explainPlate();mask(plateRegion(regions[region]));copy(title,body,rect.y+rect.h+H()*.035);E('body').style.opacity=0;await fade(E('title'),true,500);await sleep(500);await fade(E('body'),true,500);back(prev);await sleep(500);await fade(E('next'),true,750);E('next').onclick=()=>go(to);}
-  function hint(){const e=E('hint');e.hidden=false;e.style.left=E('copy').offsetLeft+'px';e.style.top=rect.y+rect.h+2+'px';e.onclick=()=>{e.hidden=true;for(const [id,region] of [['sacred-hint','sacred'],['writing-hint','writing']]){const h=E(id),r=plateRegion(regions[region]);h.hidden=false;h.style.left=r.x+r.w/2+'px';h.style.top=rect.y+rect.h+2+'px';}};}
+  async function reading(region,title,body,to,prev){explainPlate();mask(holesFor(regions[region]));copy(title,body,rect.y+rect.h+H()*.035);E('body').style.opacity=0;await fade(E('title'),true,500);await sleep(500);await fade(E('body'),true,500);back(prev);await sleep(500);await fade(E('next'),true,750);E('next').onclick=()=>go(to);}
+  function hint(){const e=E('hint');e.hidden=false;e.style.left=rect.x+rect.w/2+'px';e.style.top=rect.y+rect.h+8+'px';e.onclick=()=>{e.hidden=true;for(const [id,region] of [['sacred-hint','sacred'],['writing-hint','writing']]){const h=E(id),r=plateRegion(regions[region]);h.hidden=false;h.style.left=r.x+r.w/2+'px';h.style.top=rect.y+rect.h+2+'px';}};}
   let answering=false;
   async function answer(correct){if(answering)return;answering=true;E('hint').hidden=E('sacred-hint').hidden=E('writing-hint').hidden=true;const v=E('verdict');v.style.background=correct?'#63a152':'#a32a2a';v.firstChild.src=imgPath+(correct?'answer-correct.png':'answer-incorrect.png');v.firstChild.alt=correct?'Correct':'Try again';v.hidden=false;await sleep(800);v.hidden=true;answering=false;if(correct){document.dispatchEvent(new CustomEvent("hmane:chapter-complete",{detail:{chapter:3}}));window.Chapter4.start();}else hint();}
   async function swipeToStart(){
