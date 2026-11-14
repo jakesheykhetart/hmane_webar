@@ -294,8 +294,11 @@ const CFG = {
 
   /* Round 2 pacing: transitions and non-reading holds trimmed. Holds that
      give time to read (veilNext, tourZoomHold, btnDelay) were trimmed least,
-     and every text screen still waits for NEXT. */
-  t: { fadeIn:1.0, hold:1.0, dblExp:0.8, shrink:0.2, fade:0.2,
+     and every text screen still waits for NEXT.
+     Round 3: beat 1 (AR overlay fade-in + hold on the replica) and the beat 2
+     double-exposure are back to their original timing (1.5 / 2.0 / 1.0 s), so
+     there is time to check alignment and take a screenshot. */
+  t: { fadeIn:1.5, hold:2.0, dblExp:1.0, shrink:0.2, fade:0.2,
        bodyDelay:0.2, btnDelay:1.0, iconDelay:0.2,
        veilNext:1.0,
        tourOpen:0.5, tourHold:1.0, tourZoom:0.8, tourZoomHold:2.0, tourRest:0.3, tourClose:0.5,
@@ -312,9 +315,10 @@ const CFG = {
   copy: {
     phone : 'Tap a language name below. Then tap the part of the stone written in that script.',
     tablet: 'Tap a language name on the right. Then tap the part of the stone written in that script.',
-    /* PLACEHOLDER — replace with final approved wording. 38 words, which is
-       about the ceiling at 18pt before it crowds the NEXT button. */
-    threeScripts: 'The Rosetta Stone shows one official message, called a decree, written three times: in hieroglyphs, in Demotic, and in Greek. Scholars could already read Greek. That helped them crack the code of the other two.',
+    /* Round 3: names the stela so the word is familiar before the Ch 2 quiz.
+       39 words, which is about the ceiling at 18pt before it crowds the NEXT
+       button. */
+    threeScripts: 'The Rosetta Stone is a broken stela, a tall carved stone slab. It shows one official message, called a decree, written three times: in hieroglyphs, Demotic, and Greek. Scholars could read Greek, which helped them crack the other two.',
     rotatePhone : 'Please hold your phone upright',
     rotateTablet: 'Please hold your tablet sideways'
   }
