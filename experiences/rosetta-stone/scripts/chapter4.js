@@ -27,12 +27,12 @@ window.Chapter4 = (() => {
   ];
   const root = document.createElement('main'); root.id='c4';root.hidden=true;
   root.innerHTML=`<div id="c4-intro-art" hidden><img alt="Hieroglyphic inscription"></div>
-    <section id="c4-stage"><button id="c4-name" class="c4-audio" hidden>♫ &nbsp; HEAR PTOLEMAIS</button>
+    <section id="c4-stage"><button id="c4-name" class="c4-audio" hidden><span class="spk" aria-hidden="true"></span> &nbsp;HEAR PTOLEMAIS</button>
     <div id="c4-cartouche" hidden><img id="c4-background" alt="Cartouche surrounding the royal name"><div id="c4-signs"></div><div id="c4-slots"></div><button id="c4-reveal-target" hidden aria-label="Uncover the highlighted glyphs"></button><div id="c4-shimmer" hidden></div></div>
     <p id="c4-direction" hidden>HIEROGLYPHS READ RIGHT TO LEFT<span aria-hidden="true">←</span></p><div id="c4-direction-demo" hidden><p>START HERE. READ RIGHT TO LEFT.</p><span aria-hidden="true">←</span></div>
     <section id="c4-copy" aria-live="polite"><h1></h1><p></p></section>
-    <button id="c4-pronounce" hidden>PTOLEMY &nbsp; ♫</button><div id="c4-bank" hidden></div></section>
-    <button id="c4-next" hidden>NEXT</button><button id="c4-replay" class="c4-audio" hidden aria-label="Replay this phrase">♫ &nbsp; HEAR AGAIN</button>
+    <button id="c4-pronounce" hidden><span class="spk" aria-hidden="true"></span> &nbsp;PTOLEMY</button><div id="c4-bank" hidden></div></section>
+    <button id="c4-next" hidden>NEXT</button><button id="c4-replay" class="c4-audio" hidden aria-label="Replay this phrase"><span class="spk" aria-hidden="true"></span> &nbsp;HEAR AGAIN</button>
     <div id="c4-white" hidden></div><img id="c4-fly" alt="Transforming glyph" hidden><span id="c4-script" hidden></span>
     <div id="c4-verdict" role="status" hidden><img alt=""><p></p></div><p id="c4-notice" role="status" hidden></p>`;
   document.body.append(root);

@@ -19,6 +19,29 @@
    its origin sits on that plane, so the face stays registered on the replica while the
    outer side walls turn away and the depth shows through the hollow interior instead.
    max = the largest turn in degrees; ease = how quickly it follows (0-1 per frame). */
+/* Round 3: sound reminders ("No sound? Check your volume…") used to float over the
+   page copy and buttons. They now show as a card on a dimmed overlay, held for a few
+   seconds; tapping anywhere closes it early. Used by Chapters 2 and 3. */
+window.HMANESoundNote = (function(){
+  let el = null, timer = null;
+  function build(){
+    el = document.createElement('div'); el.id = 'sound-note'; el.setAttribute('role','status');
+    el.innerHTML = '<div class="sn-card"><p class="sn-head"></p><p class="sn-body"></p></div>';
+    document.body.append(el);
+    el.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); hide(); });
+  }
+  function hide(){ if(!el) return; clearTimeout(timer); el.classList.remove('on'); }
+  function show(head, body, ms){
+    if(!el) build();
+    el.querySelector('.sn-head').textContent = head || '';
+    el.querySelector('.sn-head').hidden = !head;
+    el.querySelector('.sn-body').textContent = body || '';
+    el.querySelector('.sn-body').hidden = !body;
+    el.classList.add('on');
+    clearTimeout(timer); timer = setTimeout(hide, ms || 3000);
+  }
+  return { show, hide };
+})();
 AFRAME.registerComponent('face-viewer', {
   schema: { max: { default: 30 }, ease: { default: 0.15 } },
   init() { this.cam = new THREE.Vector3(); this.yaw = 0; },
@@ -160,6 +183,18 @@ AFRAME.registerComponent('face-viewer', {
               color:var(--grey);background:rgba(0,0,70,.85);padding:8px 10px;font-size:clamp(14px,3.8vw,19px);
               pointer-events:none;transition:opacity .4s ease;}
 
+  /* Round 3: sound reminder card on a dimmed overlay (see HMANESoundNote). */
+  #sound-note{position:fixed;inset:0;z-index:25;display:flex;align-items:flex-end;justify-content:center;
+              padding:0 16px calc(max(16px,env(safe-area-inset-bottom)) + 96px);
+              background:rgba(0,0,40,.62);opacity:0;pointer-events:none;transition:opacity .25s ease;}
+  #sound-note.on{opacity:1;pointer-events:auto;}
+  #sound-note .sn-card{background:var(--navy);border:3px solid var(--gold);padding:14px 18px;max-width:520px;
+                       width:100%;text-align:center;font-family:Karla,sans-serif;}
+  #sound-note p{margin:0;line-height:1.3;}
+  #sound-note .sn-head{color:var(--gold);text-transform:uppercase;font-weight:300;font-size:clamp(17px,4.6vw,24px);}
+  #sound-note .sn-body{color:var(--grey);font-size:clamp(15px,4vw,19px);margin-top:6px;}
+  #sound-note .sn-head[hidden]+.sn-body{margin-top:0;}
+
   /* Round 3: the language tour can be pinched while it runs. */
   #tour-tip{position:fixed;z-index:6;left:50%;transform:translateX(-50%);bottom:max(18px,env(safe-area-inset-bottom));
             text-align:center;color:var(--grey);opacity:0;pointer-events:none;white-space:nowrap;
@@ -178,8 +213,15 @@ AFRAME.registerComponent('face-viewer', {
   #gate{position:fixed;inset:0;z-index:15;background:var(--navy);color:var(--gold);
         display:flex;flex-direction:column;align-items:center;justify-content:center;
         text-align:center;padding:10vw;text-transform:uppercase;cursor:pointer;line-height:1.15;}
-  #gate p{color:var(--grey);text-transform:none;margin:1.2em 0 0;opacity:.55;}
-  #gate.ready p{opacity:1;}
+  #gate p{color:var(--grey);text-transform:none;margin:1.2em 0 0;max-width:30em;}
+  #gate #gate-sound{display:flex;align-items:center;justify-content:center;gap:.5em;margin-top:.9em;}
+  #gate #gate-sub{color:var(--gold);text-transform:uppercase;margin-top:2.2em;opacity:.55;}
+  #gate.ready #gate-sub{opacity:1;animation:gate-pulse 1.6s ease-in-out infinite;}
+  @keyframes gate-pulse{50%{opacity:.45;}}
+  /* Round 3: one speaker icon everywhere sound plays (tinted to the text colour). */
+  .spk{display:inline-block;width:1.28em;height:1em;flex:none;vertical-align:-.12em;background:currentColor;
+       -webkit-mask:url(./assets/images/audio-icon.png) center/contain no-repeat;
+               mask:url(./assets/images/audio-icon.png) center/contain no-repeat;}
 
   #rotate{position:fixed;inset:0;z-index:20;background:var(--navy);color:var(--gold);
           display:none;align-items:center;justify-content:center;text-align:center;
@@ -191,9 +233,9 @@ AFRAME.registerComponent('face-viewer', {
   #cal input[type=range]{flex:1;}
   #cal .out{color:var(--gold);}
 </style>
-<link rel="stylesheet" href="./styles/chapter3.css?v=20261114-r3">
-<link rel="stylesheet" href="./styles/chapter4.css?v=20261114-r3">
-<link rel="stylesheet" href="./styles/chapter5.css?v=20261114-r3">
+<link rel="stylesheet" href="./styles/chapter3.css?v=20261114-r3c">
+<link rel="stylesheet" href="./styles/chapter4.css?v=20261114-r3c">
+<link rel="stylesheet" href="./styles/chapter5.css?v=20261114-r3c">
 </head>
 <body>
 
@@ -274,7 +316,10 @@ AFRAME.registerComponent('face-viewer', {
 <div id="tour-tip">Pinch to look closer</div>
 
 <div id="gate">
-  <div id="gate-title">The Rosetta Stone</div>
+  <!-- Round 3 (visitor testing): the splash says what the experience is. -->
+  <div id="gate-title">Can you read hieroglyphs?<br>Want to try?</div>
+  <p id="gate-what">Point your phone at the stone, discover how hieroglyphs work, and spell out a pharaoh’s name.</p>
+  <p id="gate-sound"><span class="spk" aria-hidden="true"></span>Turn your sound on.</p>
   <p id="gate-sub">Preparing…</p>
 </div>
 
@@ -289,7 +334,7 @@ AFRAME.registerComponent('face-viewer', {
   <div id="calout" class="out"></div>
 </div>
 
-<script src="./scripts/navigation.js?v=20261114-r3"></script>
+<script src="./scripts/navigation.js?v=20261114-r3c"></script>
 <script>
 /* ===================================================================
    HMANE ROSETTA STONE — CHAPTER 1
@@ -348,7 +393,7 @@ const CFG = {
   /* Round 3: the stone window and its slots are taller (was 0.65 x 0.60); the label
      buttons below are a single smaller row. h is capped so `below` px stay free for
      the title, the labels and the Back button on short phones. */
-  phoneWin: { w:0.69, h:0.72, below:200 },
+  phoneWin: { w:0.69, h:0.72, below:200, pad:0.04 },
   tabletWinFrac: 0.40,
 
   /* Beat 3 zoom: band height fills this fraction of screen height.
@@ -368,7 +413,7 @@ const CFG = {
        tourOpen:0.5, tourHold:1.0, tourZoom:0.8, tourZoomHold:2.0, tourRest:0.3, tourClose:0.5,
        answerHold:0.8, wrongHold:2.0, winHold:0.6, b6Fade:0.25, b6Btn:0.6 },
 
-  type: { title:30, body:16, veilBody:18, cap:20, capPhone:15, btn:30, b6:30, label:18 },
+  type: { title:30, body:16, veilBody:18, cap:20, capPhone:22, btn:30, b6:30, label:18 },
   px  : { border:5, rule:10, margin:16 },
   b6  : { blur:12, darken:0.55 },
 
@@ -416,11 +461,20 @@ const A = { beat:0, placed:{}, armed:null, locked:new Set(), caps:{}, slotEls:[]
 function stillLayout(mode, bandIndex){
   const W = vw(), H = vh(), tab = isTablet(), c = cfgFor();
   if(mode === 'window'){
-    const win = tab ? {x:0,y:0,w:W*CFG.tabletWinFrac,h:H}
-                    : {x:0,y:0,w:W*CFG.phoneWin.w,h:Math.min(H*CFG.phoneWin.h, H-CFG.phoneWin.below)};
-    /* Round 3: on phones the window is cropped around the stone itself (x 249-1207),
-       not the centre of the picture, so the taller window never clips the stone's edges. */
-    return {win, fit:fitCover(win.w, win.h, {w:c.w,h:c.h}, tab ? c.src : {x:249, y:0, w:958, h:c.h}), mode};
+    if(tab){
+      const win = {x:0,y:0,w:W*CFG.tabletWinFrac,h:H};
+      return {win, fit:fitCover(win.w, win.h, {w:c.w,h:c.h}, c.src), mode};
+    }
+    /* Round 3 (redlines 261114): on phones the whole stone fits in the window, top to
+       bottom, with 4% of the window height clear above and below it. The window widens
+       if needed so the stone's sides are never cut off. */
+    const h = Math.min(H*CFG.phoneWin.h, H-CFG.phoneWin.below);
+    const sy0 = c.slotY[0], sy1 = c.slotY[3], sx0 = c.stoneX[0], sx1 = c.stoneX[1];
+    const sc = h*(1 - 2*CFG.phoneWin.pad) / (sy1 - sy0);
+    const w = Math.min(W*0.8, Math.max(W*CFG.phoneWin.w, (sx1 - sx0)*sc + 2*S(8)));
+    const win = {x:0,y:0,w,h};
+    return {win, mode, fit:{ scale:sc, width:c.w*sc, height:c.h*sc,
+      left: w/2 - ((sx0+sx1)/2)*sc, top: h/2 - ((sy0+sy1)/2)*sc }};
   }
   if(mode === 'band'){
     const b = c.bands[bandIndex];
@@ -744,7 +798,7 @@ function layoutBeat4(){
 
   if(!tab){
     const availW = W - 2*m;
-    t.style.left = m+'px'; t.style.width = availW+'px'; t.style.textAlign='left';
+    t.style.left = m+'px'; t.style.width = availW+'px'; t.style.textAlign='center';
     t.style.top = (L.win.h + S(CFG.px.border) + 0.025*H)+'px';
     fitOneLine(t, availW, CFG.type.title);
     const tH = t.getBoundingClientRect().height || S(CFG.type.title);
@@ -921,6 +975,9 @@ function slotGeom(){
   const uiW = W - L.win.w;
   const col = tab ? {x:L.win.w, w:uiW/2} : {x:L.win.w, w:W - L.win.w};
   const lines = c.slotY.map(y => toScreen(L, 0, y).y);
+  /* Round 3: on phones the top and bottom gold bars line up with the window's top and
+     bottom edges; the two middle bars still follow the script boundaries on the stone. */
+  if(!tab){ lines[0] = L.win.y; lines[3] = L.win.y + L.win.h; }
   return {col, lines, uiW};
 }
 
@@ -935,10 +992,12 @@ function buildSlots(){
     s.addEventListener('pointerup', ()=> tryPlace(i));
     host.appendChild(s); A.slotEls.push(s);
   }
-  lines.forEach(y=>{
+  lines.forEach((y,j)=>{
     const r=document.createElement('div'); r.className='rule';
+    /* Phone: the bottom bar is drawn exactly where the window's bottom border is. */
+    const bottom = !tab && j === 3, bw = S(CFG.px.border);
     Object.assign(r.style,{left:col.x+'px', width:col.w+'px',
-      top:(y-rule/2)+'px', height:rule+'px', opacity:0});
+      top:(bottom ? y-bw : y-rule/2)+'px', height:(bottom ? bw : rule)+'px', opacity:0});
     host.appendChild(r);
   });
   if(tab){
@@ -956,7 +1015,7 @@ function buildStoneZones(){
   const host = $('slots'), L = A.layout, c = cfgFor();
   document.querySelectorAll('.stonezone').forEach(n=>n.remove());
   const x0 = toScreen(L, c.stoneX[0], 0).x, x1 = toScreen(L, c.stoneX[1], 0).x;
-  const ys = c.slotY.map(y => toScreen(L, 0, y).y);
+  const ys = slotGeom().lines;
   const clipL = L.win.x, clipR = L.win.x + L.win.w;
   const clipT = L.win.y, clipB = L.win.y + L.win.h;
   for(let i=0;i<3;i++){
@@ -984,14 +1043,16 @@ function capMetrics(){
 /* Round 3, phone: the three labels sit in one row under the title, each as wide as its
    own word, so the stone and slots can take more of the screen. */
 function buildBankRow(){
-  const fs = S(CFG.type.capPhone), W = vw(), m = S(CFG.px.margin), bd = S(3);
+  /* Round 3 (redlines 261114): bigger labels that span the full screen width. The font
+     is as large as fits (up to 22 pt); leftover width is shared out evenly. */
+  const W = vw(), m = S(CFG.px.margin), bd = S(3), gap = S(8), avail = W - 2*m - 2*gap;
   const ctx = document.createElement('canvas').getContext('2d');
-  ctx.font = `300 ${fs}px Karla, sans-serif`;
-  const padX = fs*0.8, h = fs*2.1;
-  let widths = CFG.labels.map(l => ctx.measureText(l).width + 2*padX + 2*bd);
-  let gap = S(10);
-  const total = () => widths.reduce((a,b)=>a+b,0) + gap*(widths.length-1);
-  if(total() > W - 2*m){ const f = (W - 2*m - gap*2)/(total() - gap*2); widths = widths.map(w=>w*f); }
+  const tw = f => { ctx.font = `300 ${f}px Karla, sans-serif`; return CFG.labels.map(l => ctx.measureText(l).width); };
+  let fs = S(CFG.type.capPhone);
+  const need = f => tw(f).reduce((a,b)=>a+b,0) + 3*(2*f*0.38 + 2*bd);
+  while(fs > 12 && need(fs) > avail) fs -= 0.5;
+  const base = tw(fs).map(x => x + 2*fs*0.38 + 2*bd), extra = (avail - base.reduce((a,b)=>a+b,0))/3;
+  const widths = base.map(x => x + extra), h = fs*2.3;
   const tH = $('title').getBoundingClientRect().height || S(CFG.type.title);
   const y = parseFloat($('title').style.top) + tH + 0.022*vh();
   let x = m;
@@ -1131,7 +1192,8 @@ function endChapter(){
   const gate=$('gate'), sub=$('gate-sub'), scene=document.querySelector('a-scene');
   let ready=false;
   const size=()=>{ $('gate-title').style.fontSize=S(CFG.type.title)+'px';
-                   sub.style.fontSize=S(CFG.type.body)+'px'; };
+                   ['gate-what','gate-sound'].forEach(id=>$(id).style.fontSize=S(CFG.type.body+1)+'px');
+                   sub.style.fontSize=S(CFG.type.body+2)+'px'; };
   size(); window.addEventListener('resize', size);
   const markReady=()=>{ if(ready)return; ready=true; gate.classList.add('ready');
                         sub.textContent='Tap anywhere to begin'; };
@@ -1147,6 +1209,7 @@ function endChapter(){
     catch(e){ console.error('mindar start failed', e); sub.textContent='Camera unavailable'; return; }
     gate.style.transition='opacity .3s ease'; gate.style.opacity=0;
     HMANEClock.timeout(()=> gate.style.display='none', 300);
+    HMANENav.callout(4500);
   });
 })();
 
@@ -1825,35 +1888,16 @@ function wedjLoad(){
    press, not just the first — a visitor who taps twice should get the same
    answer both times. */
 let labelTimer = null;
-function noteAudioLabel(){
-  const lab = $('c2-audiolabel');
-  HMANEClock.clear(labelTimer);
-  fadeEl(lab, 1, CH2.t.veilFade);
-  labelTimer = HMANEClock.timeout(()=> fadeEl(lab, 0, CH2.t.veilFade), CH2.t.silentHold*1000);
-}
-
+/* Round 3: the label and the one-time silent-switch reminder show together as one card
+   on a dimmed overlay, so they never sit over the copy, the Back button or NEXT. */
 let silentShown = false;
-function noteSilentSwitch(){
-  if(silentShown) return;
+function noteAudioLabel(){
+  const first = !silentShown;
   silentShown = true;
-  const el = $('c2-silent'), m = S(CFG.px.margin), a = $('c2-audio');
-  /* Sits above the audio label, which sits above the button strip. Measured
-     rather than assumed, because the label wraps on a narrow phone. */
-  const lab = $('c2-audiolabel');
-  const labH = lab.getBoundingClientRect().height || S(CFG.type.body)*1.15;
-  const above = buttonZone() + S(6) + labH + S(6);
-  el.textContent = CH2.copy.silent;
-  el.style.fontSize = S(13)+'px';
-  el.style.left = m+'px';
-  el.style.width = (vw() - 2*m)+'px';
-  el.style.bottom = above+'px'; el.style.top='auto';
-  fadeEl(el, 1, CH2.t.veilFade);
-  HMANEClock.timeout(()=> fadeEl(el, 0, CH2.t.veilFade), CH2.t.silentHold*1000);
+  HMANESoundNote.show(CH2.copy.audioLabel, first ? CH2.copy.silent : '', (first ? CH2.t.silentHold : 2.5)*1000);
 }
-
 function playWedj(){
   noteAudioLabel();
-  noteSilentSwitch();
   const ctx = Audio_.ctx;
   const fallback = () => {
     const w = $('c2-wedj');
@@ -2258,8 +2302,8 @@ window.HMANELegacy={state:()=>({beat:A.beat}),viewerOpen:()=>V.open,lastStage:()
   retire(){beat1Started=true;try{document.querySelector('a-scene').systems['mindar-image-system'].pause();}catch{}document.querySelectorAll('.mindar-ui-overlay').forEach(e=>e.style.display='none');['ar-wrap','c2-acquire'].forEach(id=>$(id).style.display='none');A.beat=31;}};
 window.addEventListener('load',()=>{const q=new URLSearchParams(location.search);if(q.has('ch3'))Chapter3.start(Math.max(1,Math.min(16,+q.get('ch3')||1)));});
 </script>
-<script src="./scripts/chapter3.js?v=20261114-r3"></script>
-<script src="./scripts/chapter4.js?v=20261114-r3"></script>
-<script src="./scripts/chapter5.js?v=20261114-r3"></script>
+<script src="./scripts/chapter3.js?v=20261114-r3c"></script>
+<script src="./scripts/chapter4.js?v=20261114-r3c"></script>
+<script src="./scripts/chapter5.js?v=20261114-r3c"></script>
 </body>
 </html>
