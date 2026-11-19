@@ -6,6 +6,8 @@
 (function () {
   const CFG = window.HMANE_CONFIG, T = CFG.timing, TXT = CFG.text;
   const $ = (s) => document.querySelector(s);
+  // Visitor analytics (analytics.js). Falls back to no-ops if that file is missing.
+  const A = window.HMANE_ANALYTICS || { track() {}, screen() {}, experienceOpened() {}, experienceClosed() {}, watchFrame() {}, endVisit() {} };
   const body = document.body;
   const params = new URLSearchParams(location.search);
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -16,6 +18,7 @@
     intro: $('#intro'), video: $('#introVideo'), skip: $('#skipIntro'),
     cards: $('#cards'), welcome: $('#cardWelcome'), galleries: $('#cardGalleries'), begin: $('#beginBtn'),
     ar: $('#ar'), stage: $('#arStage'), help: $('#helpBtn'), hint: $('#hint'),
+    chips: $('#foundChips'), edgeGlow: $('#edgeGlow'),
     status: $('#arStatus'), retry: $('#retryBtn'), toast: $('#toast'),
     exp: $('#experience'), frame: $('#expFrame'), expClose: $('#expClose')
   };
@@ -43,6 +46,7 @@
   let state = '';
   function show(name) {
     state = name;
+    A.screen(name);
     body.className = 'state-' + name;
     for (const s of [els.splash, els.intro, els.cards, els.ar]) s.classList.toggle('is-on', s.id === name || (name === 'help' && s.id === 'ar'));
     if (name === 'help') els.cards.classList.add('is-on');
@@ -52,6 +56,7 @@
   // ---------- 1. splash ----------
   function startIntro() {
     if (state !== 'splash') return;
+    A.track('tapped_to_begin');
     const v = els.video;
     v.muted = false; v.volume = 1;
     // play() must be called inside the tap so audio is allowed
@@ -67,6 +72,7 @@
   let introDone = false;
   async function endIntro(skipped) {
     if (introDone) return; introDone = true;
+    A.track('intro_finished', { skipped: !!skipped, watched_seconds: Math.round(els.video.currentTime || 0) });
     els.skip.hidden = true;
     if (skipped) {
       els.intro.classList.add('video-out');
@@ -112,6 +118,7 @@
   els.begin.addEventListener('click', (e) => {
     e.stopPropagation();
     if (state === 'help') { closeHelp(); return; }
+    A.track('begin_pressed');
     enterAR();
   });
 
@@ -126,6 +133,38 @@
   function setHint(found) {
     els.hint.classList.toggle('found', found);
     els.hint.querySelector('.hint__text').textContent = found ? TXT.hintFound : TXT.hintSearching;
+    if (!found) setSight([]);
+  }
+  // Found objects: a "Tap to explore" button each; in close-up (outline doesn't fit on screen, or the
+  // halo hasn't locked yet) the screen edges glow and the hint says a tap anywhere works.
+  let closeTimer = null;
+  function setSight(list) {
+    const ids = list.map(x => x.obj.id).join(',');
+    if (els.chips.dataset.ids !== ids) {
+      els.chips.dataset.ids = ids;
+      els.chips.innerHTML = '';
+      for (const { obj } of list) {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'found-chip';
+        b.innerHTML = `<img src="${obj.thumb}" alt=""><span class="found-chip__text"><span class="found-chip__title"></span><span class="found-chip__action"></span></span>`;
+        b.querySelector('.found-chip__title').textContent = obj.title;
+        b.querySelector('.found-chip__action').textContent = TXT.chipAction || 'Tap to explore';
+        b.setAttribute('aria-label', (TXT.chipAction || 'Tap to explore') + ': ' + obj.title);
+        b.addEventListener('click', (e) => { e.stopPropagation(); window.HMANE_AR.openSighted(obj.id) || openExperience(obj); });
+        els.chips.appendChild(b);
+      }
+    }
+    els.chips.hidden = !list.length;
+    const anyHalo = list.some(x => x.mode === 'halo');
+    const close = list.length > 0 && !anyHalo && list.some(x => x.mode === 'close');
+    els.hint.classList.toggle('found', list.length > 0);
+    els.hint.classList.toggle('has-chips', list.length > 0);
+    els.hint.querySelector('.hint__text').textContent =
+      !list.length ? TXT.hintSearching : anyHalo || list.length > 1 ? TXT.hintFound : (TXT.hintClose || TXT.hintFound);
+    // brief delay so the edges don't flash while the halo is still locking on
+    clearTimeout(closeTimer);
+    if (close) closeTimer = setTimeout(() => els.edgeGlow.classList.add('on'), 350);
+    else els.edgeGlow.classList.remove('on');
   }
 
   async function waitForAR() {
@@ -133,7 +172,9 @@
     return window.HMANE_AR;
   }
 
+  let cameraAskedAt = 0, cameraStarts = 0;
   async function enterAR() {
+    cameraAskedAt = performance.now();
     show('ar');
     els.begin.hidden = true;
     fade(els.galleries, false, 300);
@@ -146,10 +187,17 @@
     const AR = await waitForAR();
     if (!arMounted) {
       arMounted = true;
-      AR.onVideo = () => setStatus('');          // show the camera as soon as it's live
+      AR.onVideo = () => {                       // show the camera as soon as it's live
+        setStatus('');
+        A.track('camera_started', { restart: cameraStarts++ > 0, wait_ms: cameraAskedAt ? Math.round(performance.now() - cameraAskedAt) : null });
+        cameraAskedAt = 0;
+      };
       AR.onReady = () => setStatus('');
-      AR.onError = () => setStatus(TXT.cameraError, { retry: true });
-      AR.onFoundChange = (any) => setHint(any);
+      AR.onError = (d) => {
+        setStatus(TXT.cameraError, { retry: true });
+        A.track('camera_blocked', { error: String((d && (d.error || d.name || d.message)) || d || 'unknown').slice(0, 80) });
+      };
+      AR.onSightChange = (list) => { if (state === 'ar') setSight(list); };
       AR.onTap = openExperience;
       AR.mount(els.stage);
     }
@@ -161,10 +209,11 @@
     await AR.prewarm();
     await ensureMounted();
   }
-  els.retry.addEventListener('click', () => { location.href = location.pathname + '?start=ar'; });
+  els.retry.addEventListener('click', () => { A.track('camera_retry'); location.href = location.pathname + '?start=ar'; });
 
   // help overlay ("?") — the Galleries card on top of the camera
   els.help.addEventListener('click', () => {
+    A.track('help_opened');
     show('help');
     els.welcome.classList.remove('show');
     showGalleriesCard(TXT.resume);
@@ -179,6 +228,7 @@
   let inExperience = null;
   function openExperience(obj) {
     if (inExperience) return;
+    A.experienceOpened(obj);
     if (obj.open === 'tab') {
       // must open synchronously inside the tap, or browsers block it
       const a = document.createElement('a');
@@ -196,10 +246,12 @@
       els.exp.hidden = false;
       els.exp.classList.add('is-on');               // .screen layers are invisible until switched on
       body.classList.add('in-experience');
+      A.screen('experience:' + obj.id);
     }, 280);                                       // let the tap flash read first
   }
-  function closeExperience() {
+  function closeExperience(how) {
     if (!inExperience) return;
+    A.experienceClosed(how || 'back_button');
     inExperience = null;
     els.frame.src = 'about:blank';
     els.exp.hidden = true;
@@ -209,13 +261,15 @@
     setStatus(TXT.startingCamera, { loading: true });
     window.HMANE_AR.start();
   }
-  els.expClose.addEventListener('click', closeExperience);
+  els.expClose.addEventListener('click', () => closeExperience('back_button'));
+  A.watchFrame(els.frame);   // counts finished chapters inside the experience
   // An experience can send the visitor back itself when it finishes:
   //   window.parent.postMessage({ type: 'hmane:experience-complete' }, '*');
   window.addEventListener('message', (e) => {
     if (e.source !== els.frame.contentWindow) return;
     const t = e.data && e.data.type;
-    if (t === 'hmane:experience-complete' || t === 'hmane:exit') closeExperience();
+    if (t === 'hmane:experience-complete') closeExperience('finished');
+    else if (t === 'hmane:exit') closeExperience('exit');
   });
 
   let toastTimer;
@@ -235,7 +289,7 @@
   // ---------- idle reset for museum tablets ----------
   if (CFG.idleResetMinutes > 0) {
     let idle;
-    const arm = () => { clearTimeout(idle); idle = setTimeout(() => { if (state !== 'splash' && !inExperience) location.href = location.pathname; }, CFG.idleResetMinutes * 60000); };
+    const arm = () => { clearTimeout(idle); idle = setTimeout(() => { if (state !== 'splash' && !inExperience) { A.endVisit('idle_reset'); location.href = location.pathname; } }, CFG.idleResetMinutes * 60000); };
     ['pointerdown', 'keydown'].forEach(ev => addEventListener(ev, arm, { passive: true }));
     arm();
   }
@@ -253,11 +307,17 @@
       hud.textContent = [
         'state: ' + state + (AR && AR.running ? ' · AR running' : ' · AR off'),
         'camera: ' + (v && v.videoWidth ? v.videoWidth + '×' + v.videoHeight : '—'),
+        (() => { const s = AR && AR.stats; if (!s) return 'search: —';
+          const secs = Math.max(1, (performance.now() - s.t0) / 1000), pc = (a, b) => b ? Math.round(100 * a / b) + '%' : '—';
+          return 'search ' + (s.search / secs).toFixed(1) + '/s, hits ' + pc(s.searchHits, s.search) + ' · track ok ' + pc(s.trackOk, s.track) + ' (' + s.track + ')'; })(),
+        'tracking keyframe: ' + (window.HMANE_TRACK_KEYFRAME ? '128 px' : '256 px'),
         ...CFG.objects.map(o => {
           const views = o.targets || [{ index: o.targetIndex, name: 'main' }];
           const on = views.find(v => st[v.index] && st[v.index].showing);
           const lock = views.find(v => st[v.index] && st[v.index].isTracking);
-          return o.id + ': ' + (!st.length ? '—' : on ? 'TRACKED (' + (on.name || on.index) + ')' : lock ? 'locking…' : 'searching');
+          const sight = (AR._sight || []).find(x => x.obj.id === o.id);
+          return o.id + ': ' + (!st.length ? '—' : on ? 'TRACKED (' + (on.name || on.index) + ')' : lock ? 'locking…' : 'searching') +
+            (sight ? '  · FOUND [' + sight.mode + ']' : '');
         })
       ].join('\n');
     }, 300);

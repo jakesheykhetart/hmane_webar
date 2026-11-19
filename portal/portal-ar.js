@@ -4,6 +4,11 @@
  * whichever view is recognised, the glowing outline lands exactly on the object's edges and follows
  * them in perspective. Only one halo per object is shown at a time. Taps are ray-cast against an
  * invisible plate the shape of the object.
+ *
+ * "Sighting" (2026-11-19): an object counts as found the moment any of its views is recognised, without
+ * waiting for the halo's steady lock, and stays found for closeUp.stickyMs. portal.js shows a
+ * "Tap to explore" button for found objects, and when the full outline isn't on screen (close-up) the
+ * screen edges glow and a tap anywhere opens the object.
  */
 (function () {
   const CFG = window.HMANE_CONFIG;
@@ -88,6 +93,7 @@
       this.obj = obj; this.targetIndex = view.index;
       const aspect = view.h / view.w;
       const local = toLocal(chaikin(view.outline, H.smoothing), aspect);
+      this.local = local;
 
       const { tex, W, Ht, cx: hx, cy: hy } = buildHaloTexture(local, H);
       this.mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthTest: false, depthWrite: false });
@@ -136,9 +142,24 @@
       AR._halos.push(this);
     },
     flash() { this.flashAt = performance.now(); },
+    // Share of the outline's points that fall inside the screen (1 = the whole outline is visible).
+    // matrix: optional pose to test instead of the halo's own (e.g. the pose from the first recognition)
+    onScreenFraction(cam, matrix) {
+      if (!cam || (!matrix && !this.group.visible)) return 0;
+      if (!matrix) { this.group.updateMatrixWorld(true); matrix = this.group.matrixWorld; }
+      const v = this._v || (this._v = new THREE.Vector3());
+      const pts = this.local, step = Math.max(1, Math.floor(pts.length / 48));
+      let n = 0, inside = 0;
+      for (let i = 0; i < pts.length; i += step) {
+        v.set(pts[i][0], pts[i][1], 0).applyMatrix4(matrix).project(cam);
+        n++; if (v.z < 1 && Math.abs(v.x) <= 1.02 && Math.abs(v.y) <= 1.02) inside++;
+      }
+      return n ? inside / n : 0;
+    },
     tick(t, dt) {
       if (!this.found || !this.anchor3D.visible || AR._active[this.obj.id] !== this) { this.group.visible = false; this.hasPose = false; return; }
       this._smoothPose(Math.min(dt || 16, 100));
+      AR._seen(this.obj.id, this.targetIndex);
       const H = CFG.halo, now = performance.now();
       const fade = Math.min(1, (now - this.foundAt) / H.fadeInMs);
       const pulse = 1 - H.pulseDepth * 0.5 * (1 - Math.cos((now / H.pulseMs) * Math.PI * 2));
@@ -194,7 +215,9 @@
   // ---------- tracker tuning (hooks in the vendored MindAR) ----------
   // Track from the 256 px reference image instead of MindAR's 128 px default: far more reliable lock-on
   // with real gallery photos, where the object is only part of the frame.
-  window.HMANE_TRACK_KEYFRAME = CFG.tracking.highDetailTracking === false ? 1 : 0;
+  // On-site A/B: add ?kf=128 to the URL to track like the Rosetta experience does (MindAR default).
+  const kfParam = new URLSearchParams(location.search).get('kf');
+  window.HMANE_TRACK_KEYFRAME = kfParam === '128' ? 1 : kfParam === '256' ? 0 : (CFG.tracking.highDetailTracking === false ? 1 : 0);
   // MindAR assumes a 45° field of view across the frame's height. On an upright phone the height is the
   // long side, where real phone cameras see ~60–70°, so poses were estimated with the wrong lens.
   window.HMANE_adjustController = (ctl) => {
@@ -213,6 +236,11 @@
     sceneEl: null,
     running: false,
     onFoundChange: null,   // (anyFound:boolean) => void
+    onSightChange: null,   // ([{ obj, mode: 'halo' | 'close' }]) => void  — objects found right now
+    _seenAt: {},           // object id -> time the camera last recognised / tracked it
+    _detPose: {},          // object id -> pose from the latest recognition (used before the halo locks)
+    stats: null,           // search / tracking counters for ?debug=1
+    _sight: [],
     onTap: null,           // (objectConfig) => void
     onReady: null,
     onVideo: null,
@@ -241,6 +269,32 @@
           const h = this._halos.find(x => x.targetIndex === idx);
           return !!h && this._halos.some(x => x !== h && x.obj === h.obj && x.found);
         };
+        // Count an object as found the moment the search recognises it (portal UI reacts right away,
+        // instead of waiting for the tracking warm-up before the halo appears)
+        if (ctl && !ctl.__hmaneSight) {
+          ctl.__hmaneSight = true;
+          const dm = ctl._detectAndMatch.bind(ctl), tu = ctl._trackAndUpdate.bind(ctl);
+          const st = this.stats = { t0: performance.now(), search: 0, searchHits: 0, track: 0, trackOk: 0 };
+          ctl._detectAndMatch = async (...a) => {
+            const r = await dm(...a);
+            st.search++;
+            if (r && r.targetIndex !== -1) {
+              st.searchHits++;
+              const h = this._halos.find(x => x.targetIndex === r.targetIndex);
+              if (h) {
+                this._detPose[h.obj.id] = { halo: h, mvt: r.modelViewTransform, t: performance.now() };
+                this._seen(h.obj.id, r.targetIndex);
+              }
+            }
+            return r;
+          };
+          ctl._trackAndUpdate = async (...a) => {
+            const r = await tu(...a);
+            st.track++; if (r) st.trackOk++;
+            return r;
+          };
+        }
+        this._startSightLoop();
         this.onReady && this.onReady();
       });
       this.sceneEl.addEventListener('arError', (e) => { this.running = false; this.onError && this.onError(e.detail); });
@@ -296,13 +350,78 @@
       this._halos.forEach(h => { h.found = false; h.mat.opacity = 0; });
       this._active = {};
       this._found.clear();
+      this._seenAt = {}; this._detPose = {};
+      this._emitSight([]);
       this.onFoundChange && this.onFoundChange(false);
+    },
+
+    _seen(id, targetIndex) {
+      const was = this._isSighted(id);
+      this._seenAt[id] = performance.now();
+      if (!was) { this._sightView = this._sightView || {}; this._sightView[id] = targetIndex; this._onFound(id); this._updateSight(); }
+    },
+    _isSighted(id) {
+      const t = this._seenAt[id], S = CFG.closeUp || {};
+      return !!t && performance.now() - t < (S.stickyMs ?? 2500);
+    },
+    _startSightLoop() {
+      if (this._sightLoop) return;
+      this._sightLoop = setInterval(() => { if (this.running) this._updateSight(); }, 120);
+    },
+    // Which objects are found right now, and whether each shows its full halo ('halo') or is too close
+    // / not yet locked ('close').
+    _updateSight() {
+      const S = CFG.closeUp || {}, cam = this.sceneEl && this.sceneEl.camera;
+      const list = [];
+      for (const o of CFG.objects) {
+        const sighted = this._isSighted(o.id);
+        if (!sighted) {
+          if (this._sightWas && this._sightWas[o.id]) this._onFound(o.id);   // lapsed: let listeners know
+          continue;
+        }
+        const h = this._active[o.id], full = S.fullOutlineOnScreen ?? 0.8;
+        const showing = h && h.found && h.group.visible && h.mat.opacity > 0.05;
+        let mode;
+        if (showing) mode = h.onScreenFraction(cam) >= full ? 'halo' : 'close';
+        else {
+          // Halo not locked yet: judge distance from the pose the search found.
+          // 'found' = the whole object fits on screen; 'close' = it doesn't (visitor standing close).
+          const p = this._detPose[o.id], m = p && performance.now() - p.t < 1500 && this._poseMatrix(p);
+          mode = m && p.halo.onScreenFraction(cam, m) >= full ? 'found' : 'close';
+        }
+        list.push({ obj: o, mode });
+      }
+      this._sightWas = Object.fromEntries(list.map(x => [x.obj.id, true]));
+      this._emitSight(list);
+    },
+    // The anchor matrix MindAR would give this view for a recognition pose (world matrix x marker scale)
+    _poseMatrix(p) {
+      try {
+        const ctl = this._sys().controller, idx = p.halo.targetIndex, [w, h] = ctl.markerDimensions[idx];
+        const m = new THREE.Matrix4().fromArray(ctl.getWorldMatrix(p.mvt, idx));
+        const post = new THREE.Matrix4().compose(new THREE.Vector3(w / 2, w / 2 + (h - w) / 2, 0), new THREE.Quaternion(), new THREE.Vector3(w, w, w));
+        return m.multiply(post);
+      } catch (e) { return null; }
+    },
+    _emitSight(list) {
+      const key = list.map(x => x.obj.id + ':' + x.mode).join(',');
+      if (key === this._sightKey) return;
+      this._sightKey = key; this._sight = list;
+      this.onSightChange && this.onSightChange(list);
+    },
+    // Open a found object directly (from the on-screen button, or a tap anywhere in close-up)
+    openSighted(id) {
+      const s = this._sight.find(x => x.obj.id === id);
+      if (!s) return false;
+      const h = this._active[id]; h && h.flash && h.flash();
+      this.onTap && this.onTap(s.obj);
+      return true;
     },
 
     _sys() { return this.sceneEl.systems['mindar-image-system']; },
 
     _onFound(id) {
-      this._halos.some(h => h.obj.id === id && h.found) ? this._found.add(id) : this._found.delete(id);
+      (this._halos.some(h => h.obj.id === id && h.found) || this._isSighted(id)) ? this._found.add(id) : this._found.delete(id);
       this.onFoundChange && this.onFoundChange(this._found.size > 0);
     },
 
@@ -321,12 +440,16 @@
         ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
         ray.setFromCamera(ndc, cam);
         const live = this._halos.filter(h => h.found && this._active[h.obj.id] === h);
-        if (!live.length) return;
-        const hits = ray.intersectObjects(live.map(h => h.hit), false);
-        if (!hits.length) return;
-        const halo = live.find(h => h.hit === hits[0].object);
-        halo.flash();
-        this.onTap && this.onTap(halo.obj);
+        const hits = live.length ? ray.intersectObjects(live.map(h => h.hit), false) : [];
+        if (hits.length) {
+          const halo = live.find(h => h.hit === hits[0].object);
+          halo.flash();
+          this.onTap && this.onTap(halo.obj);
+          return;
+        }
+        // Missed the outline (or there is none, because the visitor is close up): if exactly one
+        // object is found, a tap anywhere opens it.
+        if (this._sight.length === 1) this.openSighted(this._sight[0].obj.id);
       });
     }
   };

@@ -10,6 +10,8 @@
   <link rel="preload" href="fonts/ApercuPro-Regular.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="portal.css">
   <script src="config.js"></script>
+  <!-- Visitor analytics (PostHog). Settings: config.js → analytics -->
+  <script defer src="analytics.js"></script>
   <!-- AR libraries load in the background during the splash and intro -->
   <script defer src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-v1.5.0.min.js"></script>
   <script defer src="vendor/mindar-image-aframe-1.2.5-hmane.js"></script>
@@ -50,6 +52,8 @@
     <div id="arStage"></div>
     <div id="arUi">
       <button id="helpBtn" class="hm-btn hm-btn--square" type="button" aria-label="How to use the portal">?</button>
+      <div id="edgeGlow" class="edge-glow" aria-hidden="true"></div>
+      <div id="foundChips" class="found-chips" hidden></div>
       <div id="hint" class="hint" role="status">
         <div class="hint__thumbs"></div>
         <p class="hint__text"></p>

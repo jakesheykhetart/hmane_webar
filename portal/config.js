@@ -15,6 +15,8 @@ window.HMANE_CONFIG = {
     resume: 'Continue',
     hintSearching: 'Hold your device up to one of these objects',
     hintFound: 'Tap the glowing object to explore',
+    hintClose: 'Tap anywhere on the screen to explore',   // shown when you're too close for the full glow
+    chipAction: 'Tap to explore',
     startingCamera: 'Starting camera…',
     cameraError: 'We need your camera to show the gallery overlays. Please allow camera access and try again.',
     retry: 'Try again',
@@ -52,12 +54,13 @@ window.HMANE_CONFIG = {
       // index = position in assets/targets/targets.mind; outline = the FULL stela outline
       // (drawn outline + replica fragment) in that view's own image coordinates.
       targets: [
-        { index: 0, name: 'front', w: 600, h: 800,
+        // 0 = the exact target the Rosetta experience uses (source-01.jpg, full drawn stela + replica)
+        { index: 0, name: 'full stela', w: 2342, h: 3288,
+          outline: [[0.3652,0.0007],[0.2744,0.0308],[0.2082,0.055],[0.1729,0.0802],[0.1718,0.2106],[0.1728,0.4772],[0.1593,0.4939],[0.1505,0.6106],[0.149,0.7001],[0.1405,0.7832],[0.137,0.9959],[0.6187,0.9966],[0.7438,0.9388],[0.8106,0.8909],[0.8296,0.866],[0.8267,0.58],[0.8207,0.56],[0.8199,0.2103],[0.8241,0.083],[0.7663,0.0479],[0.6436,0.0111],[0.6327,-0.0002]] },
+        { index: 1, name: 'front', w: 600, h: 800,
           outline: [[0.2825,-0.804],[0.1073,-0.7302],[-0.018,-0.6713],[-0.0804,-0.6091],[-0.0484,-0.2995],[0.0117,0.2306],[-0.007,0.2598],[0.0019,0.4547],[0.016,0.5924],[0.0181,0.7124],[0.0474,0.9885],[0.6822,0.9787],[0.8497,0.9076],[0.9446,0.8466],[0.9739,0.8145],[1.0229,0.4053],[1.018,0.3733],[1.0995,-0.2783],[1.1443,-0.569],[1.0482,-0.6577],[0.825,-0.7569],[0.8059,-0.7873]] },
-        { index: 1, name: 'close-up text', w: 600, h: 800,
+        { index: 2, name: 'close-up text', w: 600, h: 800,
           outline: [[-0.1976,-2.1739],[-0.5912,-2.037],[-0.877,-1.9233],[-1.0172,-1.7893],[-0.9049,-1.0752],[-0.7087,0.0983],[-0.7478,0.1611],[-0.7072,0.577],[-0.6616,0.8665],[-0.6448,1.1162],[-0.5538,1.6791],[0.7589,1.5972],[1.0838,1.4453],[1.2647,1.3207],[1.32,1.2571],[1.4056,0.4587],[1.3955,0.3956],[1.543,-0.9179],[1.6271,-1.5187],[1.4357,-1.72],[0.9788,-1.9698],[0.938,-2.0396]] },
-        { index: 2, name: 'left angle', w: 537, h: 800,
-          outline: [[0.246,-0.3437],[0.1792,-0.2478],[0.1366,-0.1834],[0.1174,-0.1362],[0.1337,0.0235],[0.1664,0.3236],[0.1601,0.3423],[0.1679,0.4621],[0.1766,0.5499],[0.1804,0.6279],[0.1996,0.8177],[0.5679,0.9571],[0.7124,0.9393],[0.8063,0.9035],[0.836,0.876],[0.8399,0.4218],[0.8302,0.3873],[0.8403,-0.3003],[0.8542,-0.6027],[0.7437,-0.6121],[0.548,-0.5509],[0.5323,-0.5624]] },
         { index: 3, name: 'right angle', w: 565, h: 800,
           outline: [[0.4582,-0.8146],[0.3057,-0.9041],[0.167,-0.9778],[0.0837,-0.9778],[0.1086,-0.543],[0.154,0.1409],[0.13,0.1721],[0.1305,0.4074],[0.1401,0.57],[0.1362,0.7108],[0.1559,1.0188],[0.6254,0.7952],[0.7016,0.7132],[0.7401,0.659],[0.7518,0.6347],[0.7814,0.3711],[0.7807,0.3508],[0.8267,-0.0465],[0.8487,-0.213],[0.8225,-0.2958],[0.7477,-0.4448],[0.7413,-0.4747]] },
         { index: 4, name: 'side-on with panels', w: 227, h: 800,
@@ -100,7 +103,10 @@ window.HMANE_CONFIG = {
   // ---- Tracking (MindAR) — tune on site ----
   tracking: {
     targets: 'assets/targets/targets.mind',
-    maxTrack: 2,          // both objects can be tracked at once
+    // 1 = once an object is found, stop searching and give all the work to following it.
+    // (With 2, the phone kept searching for the other object on every frame, which slowed
+    // tracking to a few frames a second; the halo kept losing its lock before it could appear.)
+    maxTrack: 1,
     filterMinCF: 0.0005,  // lower = steadier halo when still
     filterBeta: 50,       // higher = less lag when moving
     warmupTolerance: 3,
@@ -121,6 +127,26 @@ window.HMANE_CONFIG = {
     movingAbove: 0.06   // differences above this count as real movement
   },
 
+  // ---- Close-up / "you've found it" behaviour ----
+  // An object counts as found the moment it's recognised (no waiting for a steady lock), and stays
+  // found for stickyMs after the camera last saw it. While found, a "Tap to explore" button shows,
+  // and if the full outline doesn't fit on screen (visitor standing close), the screen edges glow
+  // and a tap anywhere opens it.
+  closeUp: {
+    stickyMs: 2500,          // keep the object "found" this long after the camera last recognised it
+    fullOutlineOnScreen: 0.8 // below this share of the outline on screen = close-up mode
+  },
+
   // Museum tablets: return to the splash after this many minutes without interaction (0 = off)
-  idleResetMinutes: 0
+  idleResetMinutes: 0,
+
+  // ---- Visitor analytics (PostHog) — see ANALYTICS.md ----
+  analytics: {
+    enabled: true,
+    key: '',                            // PostHog project API key (starts with phc_). Empty = nothing is sent.
+    host: 'https://us.i.posthog.com',   // use https://eu.i.posthog.com if the PostHog project is in the EU region
+    visitTimeoutMinutes: 30,            // a new visit starts after this long with nothing happening
+    idleCapMinutes: 10,                 // stop counting time after this long with nothing happening (phone left on a bench)
+    flushSeconds: 60                    // how often time is sent while the portal is open
+  }
 };

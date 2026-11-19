@@ -216,8 +216,54 @@ body { position: fixed; inset: 0; }
 }
 .hint__text { margin: 0; font-size: clamp(14px, 3.6vmin, 20px); line-height: 1.35; color: #fff; }
 /* once an object is recognised: thumbnails go, the tap prompt is centred */
+.hint.has-chips { background: transparent; border-color: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; padding-top: 4px; }
+.hint.has-chips .hint__text { text-shadow: 0 1px 6px rgba(0,0,0,0.9); }
 .hint.found { justify-content: center; text-align: center; }
 .hint.found .hint__thumbs { display: none; }
+
+/* "Tap to explore" button for each found object, sitting just above the hint line */
+.found-chips {
+  position: absolute; left: 50%;
+  bottom: calc(var(--edge) + var(--safe-b) + clamp(40px, 7vmin, 56px));
+  transform: translateX(-50%);
+  width: min(92vw, 560px);
+  display: flex; flex-direction: column; gap: 10px; align-items: stretch;
+  z-index: 3;
+}
+.found-chips[hidden] { display: none; }
+.found-chip {
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px 18px 10px 12px;
+  font-family: var(--font); text-align: left;
+  color: #fff;
+  background: rgba(0, 1, 39, 0.78);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  border: 3px solid var(--gold); border-radius: 0;
+  cursor: pointer; -webkit-appearance: none; appearance: none;
+  animation: chipIn 350ms ease both, chipPulse 1.8s ease-in-out 350ms infinite;
+}
+.found-chip:active { background: var(--gold); }
+.found-chip:active .found-chip__title, .found-chip:active .found-chip__action { color: var(--navy); }
+.found-chip img {
+  height: clamp(48px, 9vmin, 76px); width: auto; flex: none;
+  filter: drop-shadow(0 0 1px rgba(255,255,255,0.95)) drop-shadow(0 0 6px rgba(255,255,255,0.6));
+}
+.found-chip__text { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.found-chip__title { font-size: clamp(15px, 3.8vmin, 21px); line-height: 1.2; color: #fff; }
+.found-chip__action { font-size: var(--btn-size); letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); }
+.found-chip::after { content: '\2192'; color: var(--gold); font-size: clamp(20px, 5vmin, 30px); flex: none; }
+@keyframes chipIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes chipPulse { 0%, 100% { box-shadow: 0 0 0 rgba(232,176,94,0); } 50% { box-shadow: 0 0 18px rgba(232,176,94,0.75); } }
+
+/* Close-up: the object fills the view, so the whole screen edge glows like the halo (and any tap opens it) */
+.edge-glow {
+  position: absolute; inset: 0;
+  pointer-events: none !important;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.9), inset 0 0 7vmin 1.5vmin rgba(255,255,255,0.55);
+  opacity: 0; transition: opacity 400ms ease;
+}
+.edge-glow.on { opacity: 1; animation: edgeBreathe 1.8s ease-in-out infinite; }
+@keyframes edgeBreathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 
 .debug-hud {
   position: fixed; left: 8px; top: calc(8px + var(--safe-t)); z-index: 50;
@@ -264,4 +310,5 @@ body.state-help #cards { opacity: 1; visibility: visible; background: rgba(0, 1,
 
 @media (prefers-reduced-motion: reduce) {
   .hm-btn--prompt { animation: none; }
+  .found-chip, .edge-glow.on { animation: none; }
 }
